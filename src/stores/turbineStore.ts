@@ -9,6 +9,27 @@ export type SymmetryMode = 'pinwheel' | 'snowflake' | 'helix' | 'freeform'
 export type AppMode = 'draw' | 'view'
 export type BloomTier = 'dormant' | 'seedling' | 'flourishing' | 'radiant'
 
+export type MaterialPreset = 'teal-metal' | 'brushed-steel' | 'carbon-fiber' | 'copper-patina' | 'frosted-glass' | 'matte-white'
+
+export interface MaterialConfig {
+  label: string
+  color: string
+  metalness: number
+  roughness: number
+  opacity: number
+  transparent: boolean
+  emissiveIntensity: number
+}
+
+export const MATERIAL_PRESETS: Record<MaterialPreset, MaterialConfig> = {
+  'teal-metal': { label: 'Teal Metal', color: '#2dd4bf', metalness: 0.55, roughness: 0.35, opacity: 1, transparent: false, emissiveIntensity: 0 },
+  'brushed-steel': { label: 'Brushed Steel', color: '#b0b8c8', metalness: 0.85, roughness: 0.25, opacity: 1, transparent: false, emissiveIntensity: 0 },
+  'carbon-fiber': { label: 'Carbon Fiber', color: '#2a2a2a', metalness: 0.3, roughness: 0.6, opacity: 1, transparent: false, emissiveIntensity: 0 },
+  'copper-patina': { label: 'Copper Patina', color: '#6db89e', metalness: 0.7, roughness: 0.45, opacity: 1, transparent: false, emissiveIntensity: 0.05 },
+  'frosted-glass': { label: 'Frosted Glass', color: '#c8e6f0', metalness: 0.1, roughness: 0.15, opacity: 0.7, transparent: true, emissiveIntensity: 0.1 },
+  'matte-white': { label: 'Matte White', color: '#f0f0f0', metalness: 0.05, roughness: 0.9, opacity: 1, transparent: false, emissiveIntensity: 0 },
+}
+
 // Preset blade curves
 const PRESETS: Record<string, Vec2[]> = {
   'Breeze Petal': [
@@ -58,6 +79,12 @@ interface TurbineState {
   mode: AppMode
   setMode: (mode: AppMode) => void
 
+  // Transition animation
+  isTransitioning: boolean
+  transitionProgress: number
+  setTransitioning: (v: boolean) => void
+  setTransitionProgress: (v: number) => void
+
   // Blade curve (normalized 0-1 space)
   bladePoints: Vec2[]
   setBladePoints: (pts: Vec2[]) => void
@@ -80,6 +107,10 @@ interface TurbineState {
   setTaper: (t: number) => void
   thickness: number
   setThickness: (t: number) => void
+
+  // Material
+  materialPreset: MaterialPreset
+  setMaterialPreset: (preset: MaterialPreset) => void
 
   // Wind simulation
   windSpeed: number
@@ -127,6 +158,11 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
   mode: 'draw',
   setMode: (mode) => set({ mode }),
 
+  isTransitioning: false,
+  transitionProgress: 0,
+  setTransitioning: (v) => set({ isTransitioning: v }),
+  setTransitionProgress: (v) => set({ transitionProgress: v }),
+
   bladePoints: [...PRESETS['Breeze Petal']],
   setBladePoints: (pts) => { set({ bladePoints: pts, activePreset: null }); get().updatePhysics() },
   addBladePoint: (pt) => {
@@ -155,6 +191,9 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
   setTaper: (t) => set({ taper: t }),
   thickness: 0.06,
   setThickness: (t) => set({ thickness: t }),
+
+  materialPreset: 'teal-metal' as MaterialPreset,
+  setMaterialPreset: (preset) => set({ materialPreset: preset }),
 
   windSpeed: 6,
   setWindSpeed: (s) => { set({ windSpeed: s }); get().updatePhysics() },

@@ -1,13 +1,14 @@
-import { useRef, useMemo } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { useRef, useMemo, useCallback } from 'react'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, ContactShadows, Float } from '@react-three/drei'
 import * as THREE from 'three'
-import { useTurbineStore } from '../../stores/turbineStore'
+import { useTurbineStore, MATERIAL_PRESETS } from '../../stores/turbineStore'
 import { catmullRomSpline } from '../../utils/spline'
 
 function TurbineMesh() {
   const groupRef = useRef<THREE.Group>(null)
   const spinRef = useRef(0)
+  const bloomRef = useRef(0) // bloom transition progress 0→1
 
   const {
     bladePoints,
@@ -18,8 +19,12 @@ function TurbineMesh() {
     thickness,
     windSpeed,
     isSpinning,
-    bloomTier,
+    symmetryMode,
+    materialPreset,
+    isTransitioning,
   } = useTurbineStore()
+
+  const matConfig = MATERIAL_PRESETS[materialPreset]
 
   // Build geometry from blade curve
   const meshData = useMemo(() => {
@@ -29,6 +34,7 @@ function TurbineMesh() {
     const bladeRadius = 0.6
     const heightSegments = 24
     const curveSegments = smooth.length
+    const isHelical = symmetryMode === 'helix'
 
     const bladeGeometries: THREE.BufferGeometry[] = []
 
@@ -42,12 +48,16 @@ function TurbineMesh() {
         const twistAngle = twist * hFrac * (Math.PI / 180)
         const taperScale = 1.0 - taper * Math.abs(hFrac - 0.5) * 2
 
+        // Helical: add progressive angular offset per height slice
+        const helicalOffset = isHelical ? hFrac * Math.PI * 0.5 : 0
+
         for (let c = 0; c < curveSegments; c++) {
           const pt = smooth[c]
           const radialDist = pt.x * bladeRadius * taperScale
           const camber = pt.y * bladeRadius * taperScale
-          const cos = Math.cos(twistAngle)
-          const sin = Math.sin(twistAngle)
+          const totalTwist = twistAngle + helicalOffset
+          const cos = Math.cos(totalTwist)
+          const sin = Math.sin(totalTwist)
           const localX = radialDist
           const localZ = camber
           positions.push(localX * cos - localZ * sin, y, localX * sin + localZ * cos)
@@ -69,7 +79,6 @@ function TurbineMesh() {
       geo.setIndex(indices)
       geo.computeVertexNormals()
 
-      // Rotate for this blade position
       const angle = (b / bladeCount) * Math.PI * 2
       geo.rotateY(angle)
 
@@ -77,34 +86,51 @@ function TurbineMesh() {
     }
 
     return bladeGeometries
-  }, [bladePoints, bladeCount, height, twist, taper, thickness])
+  }, [bladePoints, bladeCount, height, twist, taper, thickness, symmetryMode])
 
-  // Spin animation
+  // Spin + bloom transition animation
   useFrame((_, delta) => {
     if (!groupRef.current) return
+
+    // Bloom transition: scale up from 0 when transitioning
+    if (isTransitioning) {
+      bloomRef.current = Math.min(1, bloomRef.current + delta * 1.8)
+      const eased = 1 - Math.pow(1 - bloomRef.current, 3) // ease-out cubic
+      groupRef.current.scale.setScalar(eased)
+      groupRef.current.position.y = (1 - eased) * -0.5
+    } else {
+      // Ensure fully visible
+      if (bloomRef.current < 1) {
+        bloomRef.current = Math.min(1, bloomRef.current + delta * 3)
+        const eased = 1 - Math.pow(1 - bloomRef.current, 3)
+        groupRef.current.scale.setScalar(eased)
+        groupRef.current.position.y = (1 - eased) * -0.5
+      }
+    }
+
     if (isSpinning) {
       const optTSR = (4 * Math.PI) / bladeCount
       const rpm = (windSpeed * optTSR) / (0.6 * 2 * Math.PI) * 60
       const radsPerSec = (rpm * 2 * Math.PI) / 60
-      spinRef.current += radsPerSec * delta * 0.3 // Slowed for visual appeal
+      spinRef.current += radsPerSec * delta * 0.3
       groupRef.current.rotation.y = spinRef.current
     }
   })
 
   const bladeMaterial = useMemo(() => {
-    const tierColors: Record<string, string> = {
-      dormant: '#4a6670',
-      seedling: '#2dd4bf',
-      flourishing: '#34d399',
-      radiant: '#a78bfa',
-    }
-    return new THREE.MeshStandardMaterial({
-      color: tierColors[bloomTier] || '#2dd4bf',
-      metalness: 0.55,
-      roughness: 0.35,
+    return new THREE.MeshPhysicalMaterial({
+      color: matConfig.color,
+      metalness: matConfig.metalness,
+      roughness: matConfig.roughness,
+      opacity: matConfig.opacity,
+      transparent: matConfig.transparent,
+      emissive: matConfig.emissiveIntensity > 0 ? matConfig.color : '#000000',
+      emissiveIntensity: matConfig.emissiveIntensity,
       side: THREE.DoubleSide,
+      clearcoat: materialPreset === 'carbon-fiber' ? 0.8 : 0,
+      clearcoatRoughness: 0.2,
     })
-  }, [bloomTier])
+  }, [matConfig, materialPreset])
 
   const strutMaterial = useMemo(() => new THREE.MeshStandardMaterial({
     color: '#64748b',
@@ -153,6 +179,33 @@ function TurbineMesh() {
         ))
       })}
     </group>
+  )
+}
+
+function BloomTransitionOverlay() {
+  const { isTransitioning, transitionProgress } = useTurbineStore()
+  const meshRef = useRef<THREE.Mesh>(null)
+  const { viewport } = useThree()
+
+  useFrame((_, delta) => {
+    if (!meshRef.current) return
+    const mat = meshRef.current.material as THREE.MeshBasicMaterial
+    if (isTransitioning) {
+      // Flash then fade
+      const flash = transitionProgress < 0.3
+        ? transitionProgress / 0.3
+        : 1 - ((transitionProgress - 0.3) / 0.7)
+      mat.opacity = Math.max(0, flash * 0.3)
+    } else {
+      mat.opacity = Math.max(0, mat.opacity - delta * 2)
+    }
+  })
+
+  return (
+    <mesh ref={meshRef} position={[0, 0, -1]}>
+      <planeGeometry args={[viewport.width * 2, viewport.height * 2]} />
+      <meshBasicMaterial color="#2dd4bf" transparent opacity={0} depthTest={false} />
+    </mesh>
   )
 }
 
@@ -227,6 +280,29 @@ function GroundPlane() {
   )
 }
 
+// Expose canvas ref for PNG export
+export let turbineCanvasRef: HTMLCanvasElement | null = null
+// Expose GL for GLB export
+export let turbineSceneRef: THREE.Scene | null = null
+export let turbineGLRef: THREE.WebGLRenderer | null = null
+
+function SceneCapture() {
+  const { scene, gl } = useThree()
+  turbineSceneRef = scene
+  turbineGLRef = gl
+  return null
+}
+
+function CanvasRefCapture({ onCanvas }: { onCanvas: (c: HTMLCanvasElement) => void }) {
+  const { gl } = useThree()
+  const captured = useRef(false)
+  if (!captured.current) {
+    captured.current = true
+    onCanvas(gl.domElement)
+  }
+  return null
+}
+
 export default function TurbineViewer() {
   const { bloomTier } = useTurbineStore()
 
@@ -240,6 +316,10 @@ export default function TurbineViewer() {
     return colors[bloomTier] || '#0a0e1a'
   }, [bloomTier])
 
+  const handleCanvas = useCallback((c: HTMLCanvasElement) => {
+    turbineCanvasRef = c
+  }, [])
+
   return (
     <div className="w-full h-full">
       <Canvas
@@ -248,11 +328,16 @@ export default function TurbineViewer() {
           antialias: true,
           toneMapping: THREE.ACESFilmicToneMapping,
           toneMappingExposure: 1.2,
+          preserveDrawingBuffer: true, // needed for PNG export
         }}
         shadows
       >
         <color attach="background" args={[bgColor]} />
         <fog attach="fog" args={[bgColor, 4, 12]} />
+
+        {/* Capture refs for export */}
+        <SceneCapture />
+        <CanvasRefCapture onCanvas={handleCanvas} />
 
         {/* Lighting */}
         <ambientLight intensity={0.3} />
@@ -265,6 +350,9 @@ export default function TurbineViewer() {
         />
         <pointLight position={[-2, 3, -1]} intensity={0.4} color="#5eead4" />
         <pointLight position={[1, 0.5, 2]} intensity={0.2} color="#a78bfa" />
+
+        {/* Bloom transition flash overlay */}
+        <BloomTransitionOverlay />
 
         {/* Scene */}
         <Float speed={0.5} rotationIntensity={0} floatIntensity={0.3}>

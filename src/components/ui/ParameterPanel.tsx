@@ -1,4 +1,6 @@
-import { useTurbineStore, type BloomTier } from '../../stores/turbineStore'
+import { useState } from 'react'
+import { useTurbineStore, type BloomTier, type SymmetryMode, type MaterialPreset, MATERIAL_PRESETS } from '../../stores/turbineStore'
+import { turbineCanvasRef, turbineGLRef, turbineSceneRef } from '../viewer/TurbineViewer'
 
 function Slider({
   label,
@@ -51,6 +53,63 @@ const TIER_CONFIG: Record<BloomTier, { label: string; color: string; icon: strin
   radiant: { label: 'Radiant', color: '#f472b6', icon: '✦' },
 }
 
+const SYMMETRY_OPTIONS: { value: SymmetryMode; label: string; desc: string }[] = [
+  { value: 'pinwheel', label: 'Pin', desc: 'Pinwheel' },
+  { value: 'helix', label: 'Hlx', desc: 'Helical' },
+  { value: 'snowflake', label: 'Snw', desc: 'Snowflake' },
+  { value: 'freeform', label: 'Free', desc: 'Freeform' },
+]
+
+const MATERIAL_KEYS = Object.keys(MATERIAL_PRESETS) as MaterialPreset[]
+
+async function handleExportGLB() {
+  try {
+    const { generateTurbineMesh, exportToGLB } = await import('../../utils/meshGenerator')
+    const store = useTurbineStore.getState()
+    const group = generateTurbineMesh(
+      store.bladePoints,
+      store.bladeCount,
+      store.height,
+      store.twist,
+      store.taper,
+      store.thickness
+    )
+    const blob = await exportToGLB(group)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `turbine-bloom-${Date.now()}.glb`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (err) {
+    console.error('GLB export failed:', err)
+  }
+}
+
+function handleExportPNG() {
+  try {
+    const canvas = turbineCanvasRef
+    if (!canvas) {
+      console.error('No canvas available for PNG export')
+      return
+    }
+    // Force a render to ensure the buffer is current
+    if (turbineGLRef && turbineSceneRef) {
+      turbineGLRef.render(turbineSceneRef, turbineGLRef.domElement as unknown as THREE.Camera)
+    }
+    const dataUrl = canvas.toDataURL('image/png')
+    const a = document.createElement('a')
+    a.href = dataUrl
+    a.download = `turbine-bloom-${Date.now()}.png`
+    a.click()
+  } catch (err) {
+    console.error('PNG export failed:', err)
+  }
+}
+
+// Import THREE for camera type
+import * as THREE from 'three'
+
 export default function ParameterPanel() {
   const {
     bladeCount, setBladeCount,
@@ -63,7 +122,12 @@ export default function ParameterPanel() {
     estimatedCp,
     powerOutput,
     isSpinning, setIsSpinning,
+    symmetryMode, setSymmetryMode,
+    materialPreset, setMaterialPreset,
+    mode,
   } = useTurbineStore()
+
+  const [exportingGLB, setExportingGLB] = useState(false)
 
   const tier = TIER_CONFIG[bloomTier]
 
@@ -107,6 +171,27 @@ export default function ParameterPanel() {
         </div>
       </div>
 
+      {/* Symmetry Mode */}
+      <div>
+        <span className="text-[11px] uppercase tracking-wider text-text-dim block mb-2">Symmetry</span>
+        <div className="flex gap-1">
+          {SYMMETRY_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setSymmetryMode(opt.value)}
+              title={opt.desc}
+              className={`flex-1 py-1.5 rounded-lg text-[10px] font-medium transition-all ${
+                symmetryMode === opt.value
+                  ? 'bg-bloom-violet/20 text-bloom-violet border border-bloom-violet/30'
+                  : 'bg-surface text-text-dim border border-border hover:border-bloom-violet/20'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Wind */}
       <Slider label="Wind Speed" value={windSpeed} min={0} max={25} step={0.5} onChange={setWindSpeed} unit=" m/s" />
 
@@ -121,6 +206,35 @@ export default function ParameterPanel() {
         </div>
       </div>
 
+      {/* Material Presets (only in view mode) */}
+      {mode === 'view' && (
+        <div className="pt-2 border-t border-border/50">
+          <span className="text-[10px] uppercase tracking-widest text-text-muted mb-2 block">Material</span>
+          <div className="grid grid-cols-2 gap-1">
+            {MATERIAL_KEYS.map((key) => {
+              const mat = MATERIAL_PRESETS[key]
+              return (
+                <button
+                  key={key}
+                  onClick={() => setMaterialPreset(key)}
+                  className={`py-1.5 px-2 rounded-lg text-[10px] font-medium transition-all flex items-center gap-1.5 ${
+                    materialPreset === key
+                      ? 'bg-teal/15 text-teal border border-teal/30'
+                      : 'bg-surface text-text-dim border border-border hover:border-teal/20'
+                  }`}
+                >
+                  <span
+                    className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-white/10"
+                    style={{ background: mat.color }}
+                  />
+                  {mat.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Spin toggle */}
       <button
         onClick={() => setIsSpinning(!isSpinning)}
@@ -132,6 +246,32 @@ export default function ParameterPanel() {
       >
         {isSpinning ? '⟳ Spinning' : '⏸ Paused'}
       </button>
+
+      {/* Export Buttons (only in view mode) */}
+      {mode === 'view' && (
+        <div className="pt-2 border-t border-border/50">
+          <span className="text-[10px] uppercase tracking-widest text-text-muted mb-2 block">Export</span>
+          <div className="flex gap-2">
+            <button
+              onClick={async () => {
+                setExportingGLB(true)
+                await handleExportGLB()
+                setExportingGLB(false)
+              }}
+              disabled={exportingGLB}
+              className="flex-1 py-2 rounded-lg text-xs font-medium transition-all border bg-surface text-text-dim border-border hover:border-teal/30 hover:text-teal disabled:opacity-50"
+            >
+              {exportingGLB ? '...' : '↓ GLB'}
+            </button>
+            <button
+              onClick={handleExportPNG}
+              className="flex-1 py-2 rounded-lg text-xs font-medium transition-all border bg-surface text-text-dim border-border hover:border-teal/30 hover:text-teal"
+            >
+              ↓ PNG
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

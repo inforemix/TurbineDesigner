@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useTurbineStore } from './stores/turbineStore'
 import Header from './components/ui/Header'
 import KaleidoscopeCanvas from './components/canvas/KaleidoscopeCanvas'
@@ -7,12 +7,48 @@ import ParameterPanel from './components/ui/ParameterPanel'
 import PresetBrowser from './components/ui/PresetBrowser'
 
 export default function App() {
-  const { mode, updatePhysics } = useTurbineStore()
+  const { mode, updatePhysics, setTransitioning, setTransitionProgress } = useTurbineStore()
+  const prevModeRef = useRef(mode)
+  const transitionTimerRef = useRef<number | null>(null)
 
   // Initialize physics on mount
   useEffect(() => {
     updatePhysics()
   }, [updatePhysics])
+
+  // Bloom transition when switching to 3D view
+  useEffect(() => {
+    if (prevModeRef.current === 'draw' && mode === 'view') {
+      // Start bloom transition animation
+      setTransitioning(true)
+      setTransitionProgress(0)
+
+      let start: number | null = null
+      const duration = 800 // ms
+
+      const animate = (ts: number) => {
+        if (start === null) start = ts
+        const elapsed = ts - start
+        const progress = Math.min(1, elapsed / duration)
+        setTransitionProgress(progress)
+
+        if (progress < 1) {
+          transitionTimerRef.current = requestAnimationFrame(animate)
+        } else {
+          setTransitioning(false)
+          setTransitionProgress(1)
+        }
+      }
+      transitionTimerRef.current = requestAnimationFrame(animate)
+    }
+    prevModeRef.current = mode
+
+    return () => {
+      if (transitionTimerRef.current) {
+        cancelAnimationFrame(transitionTimerRef.current)
+      }
+    }
+  }, [mode, setTransitioning, setTransitionProgress])
 
   return (
     <div className="w-full h-full flex flex-col bg-void">
