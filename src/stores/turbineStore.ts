@@ -74,6 +74,24 @@ const PRESETS: Record<string, Vec2[]> = {
   ],
 }
 
+// Blade section: per-height overrides for twist and taper
+export interface BladeSection {
+  heightFraction: number // 0 (root) to 1 (tip)
+  twistOffset: number   // degrees offset from global twist at this height
+  taperScale: number    // multiplier (1.0 = no change)
+}
+
+const DEFAULT_SECTIONS: BladeSection[] = [
+  { heightFraction: 0.0, twistOffset: 0, taperScale: 1.0 },
+  { heightFraction: 0.25, twistOffset: 0, taperScale: 1.0 },
+  { heightFraction: 0.5, twistOffset: 0, taperScale: 1.0 },
+  { heightFraction: 0.75, twistOffset: 0, taperScale: 1.0 },
+  { heightFraction: 1.0, twistOffset: 0, taperScale: 1.0 },
+]
+
+// Max undo history
+const MAX_HISTORY = 50
+
 interface TurbineState {
   // App mode
   mode: AppMode
@@ -91,6 +109,25 @@ interface TurbineState {
   addBladePoint: (pt: Vec2) => void
   updateBladePoint: (index: number, pt: Vec2) => void
   clearBlade: () => void
+
+  // Undo/Redo
+  undoStack: Vec2[][]
+  redoStack: Vec2[][]
+  pushUndo: () => void
+  undo: () => void
+  redo: () => void
+  canUndo: boolean
+  canRedo: boolean
+
+  // Blade sections (per-height twist/taper)
+  bladeSections: BladeSection[]
+  setBladeSections: (sections: BladeSection[]) => void
+  updateBladeSection: (index: number, section: Partial<BladeSection>) => void
+  resetBladeSections: () => void
+
+  // 2.5D section view
+  selectedSectionIndex: number
+  setSelectedSectionIndex: (i: number) => void
 
   // Symmetry
   bladeCount: number
@@ -143,12 +180,9 @@ function computeBloomTier(cp: number, windSpeed: number): BloomTier {
 
 function estimateCpFromCurve(points: Vec2[], bladeCount: number): number {
   if (points.length < 2) return 0
-  // Simple heuristic: more camber = better drag capture, airfoil shape = better lift
   const maxCamber = Math.max(...points.map(p => p.y))
   const avgCamber = points.reduce((sum, p) => sum + p.y, 0) / points.length
-  const solidity = bladeCount * avgCamber * 2 // rough chord/radius
-
-  // Blend between drag-type and lift-type Cp curves
+  const solidity = bladeCount * avgCamber * 2
   const dragCp = Math.min(0.25, maxCamber * 0.8)
   const liftCp = Math.min(0.42, (1 - maxCamber) * 0.5 * Math.min(solidity, 1))
   return dragCp * 0.4 + liftCp * 0.6
@@ -176,7 +210,67 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
     set({ bladePoints: pts, activePreset: null })
     get().updatePhysics()
   },
-  clearBlade: () => set({ bladePoints: [], activePreset: null }),
+  clearBlade: () => {
+    get().pushUndo()
+    set({ bladePoints: [], activePreset: null })
+  },
+
+  // Undo/Redo
+  undoStack: [],
+  redoStack: [],
+  canUndo: false,
+  canRedo: false,
+  pushUndo: () => {
+    const { bladePoints, undoStack } = get()
+    const newStack = [...undoStack, bladePoints.map(p => ({ ...p }))]
+    if (newStack.length > MAX_HISTORY) newStack.shift()
+    set({ undoStack: newStack, redoStack: [], canUndo: true, canRedo: false })
+  },
+  undo: () => {
+    const { undoStack, bladePoints } = get()
+    if (undoStack.length === 0) return
+    const newUndo = [...undoStack]
+    const prev = newUndo.pop()!
+    const newRedo = [...get().redoStack, bladePoints.map(p => ({ ...p }))]
+    set({
+      bladePoints: prev,
+      undoStack: newUndo,
+      redoStack: newRedo,
+      activePreset: null,
+      canUndo: newUndo.length > 0,
+      canRedo: true,
+    })
+    get().updatePhysics()
+  },
+  redo: () => {
+    const { redoStack, bladePoints } = get()
+    if (redoStack.length === 0) return
+    const newRedo = [...redoStack]
+    const next = newRedo.pop()!
+    const newUndo = [...get().undoStack, bladePoints.map(p => ({ ...p }))]
+    set({
+      bladePoints: next,
+      undoStack: newUndo,
+      redoStack: newRedo,
+      activePreset: null,
+      canUndo: true,
+      canRedo: newRedo.length > 0,
+    })
+    get().updatePhysics()
+  },
+
+  // Blade sections
+  bladeSections: [...DEFAULT_SECTIONS],
+  setBladeSections: (sections) => set({ bladeSections: sections }),
+  updateBladeSection: (index, partial) => {
+    const sections = [...get().bladeSections]
+    sections[index] = { ...sections[index], ...partial }
+    set({ bladeSections: sections })
+  },
+  resetBladeSections: () => set({ bladeSections: [...DEFAULT_SECTIONS] }),
+
+  selectedSectionIndex: 2,
+  setSelectedSectionIndex: (i) => set({ selectedSectionIndex: i }),
 
   bladeCount: 3,
   setBladeCount: (n) => { set({ bladeCount: n }); get().updatePhysics() },
@@ -210,6 +304,7 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
   loadPreset: (name) => {
     const pts = PRESETS[name]
     if (pts) {
+      get().pushUndo()
       set({ bladePoints: [...pts], activePreset: name })
       get().updatePhysics()
     }
@@ -219,7 +314,7 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
     const { bladePoints, bladeCount, windSpeed } = get()
     const cp = estimateCpFromCurve(bladePoints, bladeCount)
     const optimalTSR = (4 * Math.PI) / bladeCount
-    const sweptArea = 1.0 // normalized
+    const sweptArea = 1.0
     const power = 0.5 * 1.225 * sweptArea * Math.pow(windSpeed, 3) * cp
     const tier = computeBloomTier(cp, windSpeed)
     set({

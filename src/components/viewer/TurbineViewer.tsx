@@ -22,6 +22,7 @@ function TurbineMesh() {
     symmetryMode,
     materialPreset,
     isTransitioning,
+    bladeSections,
   } = useTurbineStore()
 
   const matConfig = MATERIAL_PRESETS[materialPreset]
@@ -45,8 +46,28 @@ function TurbineMesh() {
       for (let h = 0; h <= heightSegments; h++) {
         const hFrac = h / heightSegments
         const y = height * 0.25 + hFrac * height * 0.8
-        const twistAngle = twist * hFrac * (Math.PI / 180)
-        const taperScale = 1.0 - taper * Math.abs(hFrac - 0.5) * 2
+
+        // Interpolate section twist/taper from bladeSections
+        let sectionTwistOffset = 0
+        let sectionTaperScale = 1.0
+        if (bladeSections.length >= 2) {
+          // Find bracketing sections
+          let lo = 0
+          for (let s = 0; s < bladeSections.length - 1; s++) {
+            if (bladeSections[s + 1].heightFraction >= hFrac) { lo = s; break }
+            lo = s
+          }
+          const hi = Math.min(lo + 1, bladeSections.length - 1)
+          const loSec = bladeSections[lo]
+          const hiSec = bladeSections[hi]
+          const range = hiSec.heightFraction - loSec.heightFraction
+          const t = range > 0 ? (hFrac - loSec.heightFraction) / range : 0
+          sectionTwistOffset = loSec.twistOffset + (hiSec.twistOffset - loSec.twistOffset) * t
+          sectionTaperScale = loSec.taperScale + (hiSec.taperScale - loSec.taperScale) * t
+        }
+
+        const twistAngle = (twist * hFrac + sectionTwistOffset) * (Math.PI / 180)
+        const taperScale = (1.0 - taper * Math.abs(hFrac - 0.5) * 2) * sectionTaperScale
 
         // Helical: add progressive angular offset per height slice
         const helicalOffset = isHelical ? hFrac * Math.PI * 0.5 : 0
@@ -86,7 +107,7 @@ function TurbineMesh() {
     }
 
     return bladeGeometries
-  }, [bladePoints, bladeCount, height, twist, taper, thickness, symmetryMode])
+  }, [bladePoints, bladeCount, height, twist, taper, thickness, symmetryMode, bladeSections])
 
   // Spin + bloom transition animation
   useFrame((_, delta) => {
