@@ -16,10 +16,17 @@ export default function KaleidoscopeCanvas() {
     updateBladePoint,
   } = useTurbineStore()
 
-  const getCanvasCoords = useCallback((e: React.MouseEvent | React.TouchEvent, canvas: HTMLCanvasElement): Vec2 => {
+  const getCanvasCoords = useCallback((e: React.MouseEvent | React.TouchEvent | TouchEvent, canvas: HTMLCanvasElement): Vec2 | null => {
     const rect = canvas.getBoundingClientRect()
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+    let clientX: number, clientY: number
+    if ('touches' in e) {
+      if (e.touches.length === 0) return null
+      clientX = e.touches[0].clientX
+      clientY = e.touches[0].clientY
+    } else {
+      clientX = e.clientX
+      clientY = e.clientY
+    }
     return {
       x: clientX - rect.left,
       y: clientY - rect.top,
@@ -58,10 +65,9 @@ export default function KaleidoscopeCanvas() {
     return null
   }, [bladePoints])
 
-  const handlePointerDown = useCallback((e: React.MouseEvent) => {
+  const handleDown = useCallback((px: Vec2) => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const px = getCanvasCoords(e, canvas)
     const nearIdx = findNearestPoint(px, canvas)
 
     if (nearIdx !== null) {
@@ -69,19 +75,17 @@ export default function KaleidoscopeCanvas() {
     } else {
       setIsDrawing(true)
       const norm = pixelToNormalized(px, canvas)
-      // Clamp to reasonable blade shape
       const newPoint: Vec2 = {
         x: Math.max(0, Math.min(1, norm.x)),
         y: Math.max(0, Math.min(0.5, Math.abs(norm.y))),
       }
       addBladePoint(newPoint)
     }
-  }, [getCanvasCoords, findNearestPoint, pixelToNormalized, addBladePoint])
+  }, [findNearestPoint, pixelToNormalized, addBladePoint])
 
-  const handlePointerMove = useCallback((e: React.MouseEvent) => {
+  const handleMove = useCallback((px: Vec2) => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const px = getCanvasCoords(e, canvas)
 
     if (dragIndex !== null) {
       const cx = canvas.width / 2
@@ -98,22 +102,119 @@ export default function KaleidoscopeCanvas() {
         x: Math.max(0, Math.min(1, norm.x)),
         y: Math.max(0, Math.min(0.5, Math.abs(norm.y))),
       }
-      // Only add if sufficiently far from last point
       const last = bladePoints[bladePoints.length - 1]
       if (last) {
         const dist = Math.sqrt((newPoint.x - last.x) ** 2 + (newPoint.y - last.y) ** 2)
         if (dist > 0.03) addBladePoint(newPoint)
       }
     }
-  }, [dragIndex, isDrawing, bladePoints, getCanvasCoords, pixelToNormalized, updateBladePoint, addBladePoint])
+  }, [dragIndex, isDrawing, bladePoints, pixelToNormalized, updateBladePoint, addBladePoint])
 
-  const handlePointerUp = useCallback(() => {
+  const handleUp = useCallback(() => {
     setIsDrawing(false)
     setDragIndex(null)
-    // Sort points by x coordinate for clean curves
     const sorted = [...useTurbineStore.getState().bladePoints].sort((a, b) => a.x - b.x)
     setBladePoints(sorted)
   }, [setBladePoints])
+
+  // Mouse handlers
+  const handlePointerDown = useCallback((e: React.MouseEvent) => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const px = getCanvasCoords(e, canvas)
+    if (px) handleDown(px)
+  }, [getCanvasCoords, handleDown])
+
+  const handlePointerMove = useCallback((e: React.MouseEvent) => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const px = getCanvasCoords(e, canvas)
+    if (px) handleMove(px)
+  }, [getCanvasCoords, handleMove])
+
+  const handlePointerUp = useCallback(() => {
+    handleUp()
+  }, [handleUp])
+
+  // Touch handlers with proper passive:false for preventDefault
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const onTouchStart = (e: TouchEvent) => {
+      e.preventDefault()
+      const px = getCanvasCoords(e, canvas)
+      if (!px) return
+      const nearIdx = findNearestPoint(px, canvas)
+      if (nearIdx !== null) {
+        setDragIndex(nearIdx)
+      } else {
+        setIsDrawing(true)
+        const norm = pixelToNormalized(px, canvas)
+        addBladePoint({
+          x: Math.max(0, Math.min(1, norm.x)),
+          y: Math.max(0, Math.min(0.5, Math.abs(norm.y))),
+        })
+      }
+    }
+
+    const onTouchMove = (e: TouchEvent) => {
+      e.preventDefault()
+      const px = getCanvasCoords(e, canvas)
+      if (!px) return
+      // Read drag state from refs since this is a native listener
+      const currentDragIndex = dragIndexRef.current
+      const currentIsDrawing = isDrawingRef.current
+
+      if (currentDragIndex !== null) {
+        const cx = canvas.width / 2
+        const cy = canvas.height / 2
+        const radius = Math.min(cx, cy) * 0.75
+        updateBladePoint(currentDragIndex, {
+          x: Math.max(0, Math.min(1, (px.x - cx) / radius)),
+          y: Math.max(0, Math.min(0.5, Math.abs((px.y - cy) / radius))),
+        })
+      } else if (currentIsDrawing) {
+        const norm = pixelToNormalized(px, canvas)
+        const newPoint: Vec2 = {
+          x: Math.max(0, Math.min(1, norm.x)),
+          y: Math.max(0, Math.min(0.5, Math.abs(norm.y))),
+        }
+        const pts = useTurbineStore.getState().bladePoints
+        const last = pts[pts.length - 1]
+        if (last) {
+          const dist = Math.sqrt((newPoint.x - last.x) ** 2 + (newPoint.y - last.y) ** 2)
+          if (dist > 0.03) addBladePoint(newPoint)
+        }
+      }
+    }
+
+    const onTouchEnd = (e: TouchEvent) => {
+      e.preventDefault()
+      setIsDrawing(false)
+      setDragIndex(null)
+      const sorted = [...useTurbineStore.getState().bladePoints].sort((a, b) => a.x - b.x)
+      setBladePoints(sorted)
+    }
+
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false })
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false })
+    canvas.addEventListener('touchend', onTouchEnd, { passive: false })
+    canvas.addEventListener('touchcancel', onTouchEnd, { passive: false })
+
+    return () => {
+      canvas.removeEventListener('touchstart', onTouchStart)
+      canvas.removeEventListener('touchmove', onTouchMove)
+      canvas.removeEventListener('touchend', onTouchEnd)
+      canvas.removeEventListener('touchcancel', onTouchEnd)
+    }
+  }, [getCanvasCoords, findNearestPoint, pixelToNormalized, addBladePoint, updateBladePoint, setBladePoints])
+
+  // Refs for touch handlers to read latest state
+  const dragIndexRef = useRef(dragIndex)
+  const isDrawingRef = useRef(isDrawing)
+  dragIndexRef.current = dragIndex
+  isDrawingRef.current = isDrawing
 
   // Animation render loop
   useEffect(() => {
@@ -280,6 +381,7 @@ export default function KaleidoscopeCanvas() {
     <canvas
       ref={canvasRef}
       className="w-full h-full cursor-crosshair"
+      style={{ touchAction: 'none' }}
       onMouseDown={handlePointerDown}
       onMouseMove={handlePointerMove}
       onMouseUp={handlePointerUp}
