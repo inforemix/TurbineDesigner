@@ -1,30 +1,36 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTurbineStore } from './stores/turbineStore'
+import { usePuzzleStore } from './stores/puzzleStore'
 import Header from './components/ui/Header'
 import KaleidoscopeCanvas from './components/canvas/KaleidoscopeCanvas'
+import SideViewCanvas from './components/canvas/SideViewCanvas'
 import TurbineViewer from './components/viewer/TurbineViewer'
 import ParameterPanel from './components/ui/ParameterPanel'
 import PresetBrowser from './components/ui/PresetBrowser'
+import PuzzleHUD from './components/puzzle/PuzzleHUD'
+import ChallengeList from './components/puzzle/ChallengeList'
+import Celebration from './components/puzzle/Celebration'
 import BladeSectionEditor from './components/editor/BladeSectionEditor'
 import SectionPreview from './components/editor/SectionPreview'
 
 export default function App() {
   const { mode, updatePhysics, setTransitioning, setTransitionProgress } = useTurbineStore()
+  const { showChallengeList } = usePuzzleStore()
   const prevModeRef = useRef(mode)
   const transitionTimerRef = useRef<number | null>(null)
 
-  // Initialize physics on mount
   useEffect(() => {
     updatePhysics()
   }, [updatePhysics])
 
-  // Bloom transition when switching to 3D view
   useEffect(() => {
+    if ((prevModeRef.current === 'draw' || prevModeRef.current === 'side') && mode === 'view') {
     if (prevModeRef.current === 'draw' && mode === 'view') {
       setTransitioning(true)
       setTransitionProgress(0)
 
       let start: number | null = null
+      const duration = 1200 // extended for dramatic reveal
       const duration = 800
 
       const animate = (ts: number) => {
@@ -45,9 +51,7 @@ export default function App() {
     prevModeRef.current = mode
 
     return () => {
-      if (transitionTimerRef.current) {
-        cancelAnimationFrame(transitionTimerRef.current)
-      }
+      if (transitionTimerRef.current) cancelAnimationFrame(transitionTimerRef.current)
     }
   }, [mode, setTransitioning, setTransitionProgress])
 
@@ -64,6 +68,16 @@ export default function App() {
         {/* Main canvas area */}
         <main className="flex-1 relative">
           {mode === 'draw' ? (
+            <div className="absolute inset-0">
+              <KaleidoscopeCanvas />
+              {/* Puzzle HUD overlay */}
+              <PuzzleHUD />
+              {/* Drawing hints overlay */}
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-none">
+                <div className="bg-surface/80 backdrop-blur-sm rounded-full px-4 py-1.5 border border-border/40">
+                  <span className="text-[10px] text-text-muted">
+                    Click to add · Drag to reshape · Right-click to delete · Ctrl+Z to undo
+                  </span>
             <div className="absolute inset-0 flex flex-col">
               {/* Drawing canvas */}
               <div className="flex-1 relative">
@@ -80,6 +94,10 @@ export default function App() {
 
               {/* 2.5D Section Preview (collapsible) */}
               <SectionPanel />
+            </div>
+          ) : mode === 'side' ? (
+            <div className="absolute inset-0">
+              <SideViewCanvas />
             </div>
           ) : (
             <div className="absolute inset-0">
@@ -113,6 +131,10 @@ export default function App() {
 
       {/* Mobile bottom bar */}
       <MobileBottomBar />
+
+      {/* Global overlays */}
+      {showChallengeList && <ChallengeList />}
+      <Celebration />
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { generateParametricProfile } from '../utils/profileGenerator'
 
 export interface Vec2 {
   x: number
@@ -6,7 +7,7 @@ export interface Vec2 {
 }
 
 export type SymmetryMode = 'pinwheel' | 'snowflake' | 'helix' | 'freeform'
-export type AppMode = 'draw' | 'view'
+export type AppMode = 'draw' | 'side' | 'view'
 export type BloomTier = 'dormant' | 'seedling' | 'flourishing' | 'radiant'
 
 export type MaterialPreset = 'teal-metal' | 'brushed-steel' | 'carbon-fiber' | 'copper-patina' | 'frosted-glass' | 'matte-white'
@@ -109,6 +110,22 @@ interface TurbineState {
   addBladePoint: (pt: Vec2) => void
   updateBladePoint: (index: number, pt: Vec2) => void
   clearBlade: () => void
+  deleteBladePoint: (index: number) => void
+
+  // Undo/redo
+  history: Vec2[][]
+  historyIndex: number
+  pushHistory: () => void
+  undo: () => void
+  redo: () => void
+
+  // Drawing tools
+  snapToGrid: boolean
+  setSnapToGrid: (v: boolean) => void
+
+  // Curve smoothing
+  curveSmoothing: number
+  setCurveSmoothing: (v: number) => void
 
   // Undo/Redo
   undoStack: Vec2[][]
@@ -145,6 +162,23 @@ interface TurbineState {
   thickness: number
   setThickness: (t: number) => void
 
+  // Distribution curves (replace linear taper/twist)
+  // x = height fraction 0→1, y = value
+  chordCurve: Vec2[]   // y = chord scale 0.1→1.5
+  setChordCurve: (pts: Vec2[]) => void
+  twistCurve: Vec2[]   // y = twist fraction 0→1 (× 90°)
+  setTwistCurve: (pts: Vec2[]) => void
+
+  // Parametric profile mode
+  parametricMode: boolean
+  parametricCamber: number
+  parametricCamberPeak: number
+  parametricLeRadius: number
+  parametricTrailingSweep: number
+  setParametricMode: (v: boolean) => void
+  setParametric: (field: string, value: number) => void
+  applyParametric: () => void
+
   // Material
   materialPreset: MaterialPreset
   setMaterialPreset: (preset: MaterialPreset) => void
@@ -178,15 +212,18 @@ function computeBloomTier(cp: number, windSpeed: number): BloomTier {
   return 'radiant'
 }
 
-function estimateCpFromCurve(points: Vec2[], bladeCount: number): number {
+export function estimateCpFromCurve(points: Vec2[], bladeCount: number): number {
   if (points.length < 2) return 0
   const maxCamber = Math.max(...points.map(p => p.y))
   const avgCamber = points.reduce((sum, p) => sum + p.y, 0) / points.length
   const solidity = bladeCount * avgCamber * 2
+
   const dragCp = Math.min(0.25, maxCamber * 0.8)
   const liftCp = Math.min(0.42, (1 - maxCamber) * 0.5 * Math.min(solidity, 1))
   return dragCp * 0.4 + liftCp * 0.6
 }
+
+let _skipHistoryPush = false
 
 export const useTurbineStore = create<TurbineState>((set, get) => ({
   mode: 'draw',
@@ -198,19 +235,71 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
   setTransitionProgress: (v) => set({ transitionProgress: v }),
 
   bladePoints: [...PRESETS['Breeze Petal']],
-  setBladePoints: (pts) => { set({ bladePoints: pts, activePreset: null }); get().updatePhysics() },
+  setBladePoints: (pts) => {
+    if (!_skipHistoryPush) get().pushHistory()
+    set({ bladePoints: pts, activePreset: null })
+    get().updatePhysics()
+  },
   addBladePoint: (pt) => {
+    if (!_skipHistoryPush) get().pushHistory()
     const pts = [...get().bladePoints, pt]
     set({ bladePoints: pts, activePreset: null })
     get().updatePhysics()
   },
   updateBladePoint: (index, pt) => {
+    if (!_skipHistoryPush) get().pushHistory()
     const pts = [...get().bladePoints]
     pts[index] = pt
     set({ bladePoints: pts, activePreset: null })
     get().updatePhysics()
   },
   clearBlade: () => {
+    get().pushHistory()
+    set({ bladePoints: [], activePreset: null })
+    get().updatePhysics()
+  },
+  deleteBladePoint: (index) => {
+    get().pushHistory()
+    const pts = get().bladePoints.filter((_, i) => i !== index)
+    set({ bladePoints: pts, activePreset: null })
+    get().updatePhysics()
+  },
+
+  history: [],
+  historyIndex: -1,
+  pushHistory: () => {
+    const { bladePoints, history, historyIndex } = get()
+    const clone = bladePoints.map(p => ({ ...p }))
+    const trimmed = history.slice(0, historyIndex + 1)
+    const next = [...trimmed, clone].slice(-MAX_HISTORY)
+    set({ history: next, historyIndex: next.length - 1 })
+  },
+  undo: () => {
+    const { history, historyIndex } = get()
+    if (historyIndex <= 0) return
+    const newIndex = historyIndex - 1
+    const pts = history[newIndex].map(p => ({ ...p }))
+    _skipHistoryPush = true
+    set({ bladePoints: pts, historyIndex: newIndex, activePreset: null })
+    _skipHistoryPush = false
+    get().updatePhysics()
+  },
+  redo: () => {
+    const { history, historyIndex } = get()
+    if (historyIndex >= history.length - 1) return
+    const newIndex = historyIndex + 1
+    const pts = history[newIndex].map(p => ({ ...p }))
+    _skipHistoryPush = true
+    set({ bladePoints: pts, historyIndex: newIndex, activePreset: null })
+    _skipHistoryPush = false
+    get().updatePhysics()
+  },
+
+  snapToGrid: false,
+  setSnapToGrid: (v) => set({ snapToGrid: v }),
+
+  curveSmoothing: 8,
+  setCurveSmoothing: (v) => set({ curveSmoothing: v }),
     get().pushUndo()
     set({ bladePoints: [], activePreset: null })
   },
@@ -286,6 +375,30 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
   thickness: 0.06,
   setThickness: (t) => set({ thickness: t }),
 
+  chordCurve: [{ x: 0, y: 1.0 }, { x: 1, y: 1.0 }],
+  setChordCurve: (pts) => set({ chordCurve: pts }),
+  twistCurve: [{ x: 0, y: 0.0 }, { x: 1, y: 0.0 }],
+  setTwistCurve: (pts) => set({ twistCurve: pts }),
+
+  parametricMode: false,
+  parametricCamber: 0.15,
+  parametricCamberPeak: 0.4,
+  parametricLeRadius: 0.05,
+  parametricTrailingSweep: 0.0,
+  setParametricMode: (v) => set({ parametricMode: v }),
+  setParametric: (field, value) => {
+    set({ [field]: value } as Partial<TurbineState>)
+    get().applyParametric()
+  },
+  applyParametric: () => {
+    const { parametricCamber, parametricCamberPeak, parametricLeRadius, parametricTrailingSweep } = get()
+    const pts = generateParametricProfile(parametricCamber, parametricCamberPeak, parametricLeRadius, parametricTrailingSweep)
+    _skipHistoryPush = true
+    set({ bladePoints: pts, activePreset: null })
+    _skipHistoryPush = false
+    get().updatePhysics()
+  },
+
   materialPreset: 'teal-metal' as MaterialPreset,
   setMaterialPreset: (preset) => set({ materialPreset: preset }),
 
@@ -304,6 +417,7 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
   loadPreset: (name) => {
     const pts = PRESETS[name]
     if (pts) {
+      get().pushHistory()
       get().pushUndo()
       set({ bladePoints: [...pts], activePreset: name })
       get().updatePhysics()

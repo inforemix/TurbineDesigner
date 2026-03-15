@@ -1,7 +1,13 @@
 import { useTurbineStore } from '../../stores/turbineStore'
+import { usePuzzleStore } from '../../stores/puzzleStore'
+import { CHALLENGES } from '../../data/challenges'
 
 export default function Header() {
   const { mode, setMode, bloomTier } = useTurbineStore()
+  const { activeChallengeId, showChallengeList, setShowChallengeList, completedChallenges } = usePuzzleStore()
+
+  const activeChallenge = CHALLENGES.find(c => c.id === activeChallengeId)
+  const totalCompleted = Object.keys(completedChallenges).length
 
   const tierGlow: Record<string, string> = {
     dormant: '',
@@ -26,7 +32,7 @@ export default function Header() {
           Turbine<span className="text-teal">Bloom</span>
         </span>
         <span className="text-[9px] px-1.5 py-0.5 rounded bg-surface text-text-muted border border-border/50">
-          v0.1
+          v0.2
         </span>
       </div>
 
@@ -34,31 +40,53 @@ export default function Header() {
       <div className="flex items-center bg-surface rounded-lg border border-border/50 p-0.5">
         <button
           onClick={() => setMode('draw')}
-          className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all ${
-            mode === 'draw'
-              ? 'bg-teal/20 text-teal shadow-sm'
-              : 'text-text-muted hover:text-text'
+          className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+            mode === 'draw' ? 'bg-teal/20 text-teal shadow-sm' : 'text-text-muted hover:text-text'
           }`}
         >
           ✎ Draw
         </button>
         <button
-          onClick={() => setMode('view')}
-          className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all ${
-            mode === 'view'
-              ? 'bg-teal/20 text-teal shadow-sm'
-              : 'text-text-muted hover:text-text'
+          onClick={() => setMode('side')}
+          className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+            mode === 'side' ? 'bg-teal/20 text-teal shadow-sm' : 'text-text-muted hover:text-text'
           }`}
         >
-          ◇ View 3D
+          ⬜ Side
+        </button>
+        <button
+          onClick={() => setMode('view')}
+          className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+            mode === 'view' ? 'bg-teal/20 text-teal shadow-sm' : 'text-text-muted hover:text-text'
+          }`}
+        >
+          ◇ 3D
         </button>
       </div>
 
       {/* Right section */}
-      <div className="flex items-center gap-3">
-        <span className="text-[10px] text-text-muted hidden sm:block">
-          Draw a blade → See it bloom
-        </span>
+      <div className="flex items-center gap-2">
+        {/* Active challenge indicator */}
+        {activeChallenge && (
+          <span className="hidden sm:flex items-center gap-1 text-[10px] text-teal border border-teal/25 rounded-full px-2 py-0.5 bg-teal/8">
+            <span>{activeChallenge.icon}</span>
+            <span className="max-w-[100px] truncate">{activeChallenge.title}</span>
+          </span>
+        )}
+
+        {/* Challenges button */}
+        <button
+          onClick={() => setShowChallengeList(!showChallengeList)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border border-border/50 bg-surface hover:border-teal/30 hover:text-teal text-text-dim"
+        >
+          <span>⚡</span>
+          <span className="hidden sm:inline">Challenges</span>
+          {totalCompleted > 0 && (
+            <span className="text-[9px] bg-teal/20 text-teal rounded-full px-1.5 py-0.5 border border-teal/20">
+              {totalCompleted}
+            </span>
+          )}
+        </button>
       </div>
     </header>
   )
