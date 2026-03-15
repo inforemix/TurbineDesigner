@@ -24,19 +24,7 @@ function TurbineMesh() {
   const {
     bladePoints, bladeCount, height, twist, taper, thickness,
     windSpeed, isSpinning, symmetryMode, materialPreset, isTransitioning, transitionProgress, curveSmoothing,
-    chordCurve, twistCurve,
-    bladePoints,
-    bladeCount,
-    height,
-    twist,
-    taper,
-    thickness,
-    windSpeed,
-    isSpinning,
-    symmetryMode,
-    materialPreset,
-    isTransitioning,
-    bladeSections,
+    chordCurve, twistCurve, bladeSections,
   } = useTurbineStore()
 
   const matConfig = MATERIAL_PRESETS[materialPreset]
@@ -60,8 +48,6 @@ function TurbineMesh() {
       for (let h = 0; h <= heightSegments; h++) {
         const hFrac = h / heightSegments
         const y = height * 0.25 + hFrac * height * 0.8
-        const twistAngle = sampleCurve(twistCurve, hFrac) * 90 * (Math.PI / 180)
-        const taperScale = sampleCurve(chordCurve, hFrac)
 
         // Interpolate section twist/taper from bladeSections
         let sectionTwistOffset = 0
@@ -151,7 +137,6 @@ function TurbineMesh() {
   if (bladeReveals.current.length !== bladeCount) {
     bladeReveals.current = Array(bladeCount).fill(0)
   }
-  }, [bladePoints, bladeCount, height, twist, taper, thickness, symmetryMode, bladeSections])
 
   useFrame((_, delta) => {
     if (!groupRef.current) return
