@@ -300,9 +300,6 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
 
   curveSmoothing: 8,
   setCurveSmoothing: (v) => set({ curveSmoothing: v }),
-    get().pushUndo()
-    set({ bladePoints: [], activePreset: null })
-  },
 
   // Undo/Redo
   undoStack: [],

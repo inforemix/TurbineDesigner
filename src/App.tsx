@@ -24,19 +24,12 @@ export default function App() {
   }, [updatePhysics])
 
   useEffect(() => {
-    if ((prevModeRef.current === 'draw' || prevModeRef.current === 'side') && mode === 'view') {
     if (prevModeRef.current === 'draw' && mode === 'view') {
       setTransitioning(true)
       setTransitionProgress(0)
 
-<<<<<<< HEAD
-      let start: number | null = null
-      const duration = 1200 // extended for dramatic reveal
-      const duration = 800
-=======
       const duration = 1200
       const startTime = performance.now()
->>>>>>> df5d97e74698ef65075bf63e1ae38f441271cf65
 
       const tick = (now: number) => {
         const progress = Math.min(1, (now - startTime) / duration)
@@ -69,20 +62,12 @@ export default function App() {
         {/* Main canvas area */}
         <main className="flex-1 relative">
           {mode === 'draw' ? (
-            <div className="absolute inset-0">
-              <KaleidoscopeCanvas />
-              {/* Puzzle HUD overlay */}
-              <PuzzleHUD />
-              {/* Drawing hints overlay */}
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-none">
-                <div className="bg-surface/80 backdrop-blur-sm rounded-full px-4 py-1.5 border border-border/40">
-                  <span className="text-[10px] text-text-muted">
-                    Click to add · Drag to reshape · Right-click to delete · Ctrl+Z to undo
-                  </span>
             <div className="absolute inset-0 flex flex-col">
               {/* Drawing canvas */}
               <div className="flex-1 relative">
                 <KaleidoscopeCanvas />
+                {/* Puzzle HUD overlay */}
+                <PuzzleHUD />
                 {/* Drawing hints overlay */}
                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-none">
                   <div className="bg-surface/80 backdrop-blur-sm rounded-full px-4 py-1.5 border border-border/40">
