@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { generateParametricProfile } from '../utils/profileGenerator'
 
 export interface Vec2 {
   x: number
@@ -6,7 +7,7 @@ export interface Vec2 {
 }
 
 export type SymmetryMode = 'pinwheel' | 'snowflake' | 'helix' | 'freeform'
-export type AppMode = 'draw' | 'view'
+export type AppMode = 'draw' | 'side' | 'view'
 export type BloomTier = 'dormant' | 'seedling' | 'flourishing' | 'radiant'
 
 export type MaterialPreset = 'teal-metal' | 'brushed-steel' | 'carbon-fiber' | 'copper-patina' | 'frosted-glass' | 'matte-white'
@@ -125,6 +126,23 @@ interface TurbineState {
   setTaper: (t: number) => void
   thickness: number
   setThickness: (t: number) => void
+
+  // Distribution curves (replace linear taper/twist)
+  // x = height fraction 0→1, y = value
+  chordCurve: Vec2[]   // y = chord scale 0.1→1.5
+  setChordCurve: (pts: Vec2[]) => void
+  twistCurve: Vec2[]   // y = twist fraction 0→1 (× 90°)
+  setTwistCurve: (pts: Vec2[]) => void
+
+  // Parametric profile mode
+  parametricMode: boolean
+  parametricCamber: number
+  parametricCamberPeak: number
+  parametricLeRadius: number
+  parametricTrailingSweep: number
+  setParametricMode: (v: boolean) => void
+  setParametric: (field: string, value: number) => void
+  applyParametric: () => void
 
   // Material
   materialPreset: MaterialPreset
@@ -261,6 +279,30 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
   setTaper: (t) => set({ taper: t }),
   thickness: 0.06,
   setThickness: (t) => set({ thickness: t }),
+
+  chordCurve: [{ x: 0, y: 1.0 }, { x: 1, y: 1.0 }],
+  setChordCurve: (pts) => set({ chordCurve: pts }),
+  twistCurve: [{ x: 0, y: 0.0 }, { x: 1, y: 0.0 }],
+  setTwistCurve: (pts) => set({ twistCurve: pts }),
+
+  parametricMode: false,
+  parametricCamber: 0.15,
+  parametricCamberPeak: 0.4,
+  parametricLeRadius: 0.05,
+  parametricTrailingSweep: 0.0,
+  setParametricMode: (v) => set({ parametricMode: v }),
+  setParametric: (field, value) => {
+    set({ [field]: value } as Partial<TurbineState>)
+    get().applyParametric()
+  },
+  applyParametric: () => {
+    const { parametricCamber, parametricCamberPeak, parametricLeRadius, parametricTrailingSweep } = get()
+    const pts = generateParametricProfile(parametricCamber, parametricCamberPeak, parametricLeRadius, parametricTrailingSweep)
+    _skipHistoryPush = true
+    set({ bladePoints: pts, activePreset: null })
+    _skipHistoryPush = false
+    get().updatePhysics()
+  },
 
   materialPreset: 'teal-metal' as MaterialPreset,
   setMaterialPreset: (preset) => set({ materialPreset: preset }),

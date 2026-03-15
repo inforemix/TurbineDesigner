@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { Vec2 } from '../stores/turbineStore'
-import { catmullRomSpline } from './spline'
+import { catmullRomSpline, sampleCurve } from './spline'
 
 /**
  * Generate a 3D VAWT mesh from blade curve + parameters
@@ -11,7 +11,9 @@ export function generateTurbineMesh(
   height: number,
   twist: number,
   taper: number,
-  thickness: number
+  thickness: number,
+  chordCurve?: Vec2[],
+  twistCurve?: Vec2[],
 ): THREE.Group {
   const group = new THREE.Group()
 
@@ -45,7 +47,9 @@ export function generateTurbineMesh(
       twist,
       taper,
       thickness,
-      b
+      b,
+      chordCurve,
+      twistCurve,
     )
     bladeMesh.rotation.y = bladeAngle
     group.add(bladeMesh)
@@ -95,7 +99,9 @@ function createBlade(
   twist: number,
   taper: number,
   _thickness: number,
-  bladeIndex: number
+  bladeIndex: number,
+  chordCurve?: Vec2[],
+  twistCurve?: Vec2[],
 ): THREE.Mesh {
   const heightSegments = 24
   const curveSegments = curvePoints.length
@@ -110,8 +116,10 @@ function createBlade(
     const y = height * 0.25 + hFrac * height * 0.8
 
     // Twist and taper at this height
-    const twistAngle = twist * hFrac * (Math.PI / 180)
-    const taperScale = 1.0 - taper * Math.abs(hFrac - 0.5) * 2
+    const defaultChord: Vec2[] = [{ x: 0, y: 1 - taper * Math.abs(0 - 0.5) * 2 }, { x: 1, y: 1 - taper * Math.abs(1 - 0.5) * 2 }]
+    const defaultTwist: Vec2[] = [{ x: 0, y: 0 }, { x: 1, y: twist / 90 }]
+    const taperScale = sampleCurve(chordCurve ?? defaultChord, hFrac)
+    const twistAngle = sampleCurve(twistCurve ?? defaultTwist, hFrac) * 90 * (Math.PI / 180)
 
     for (let c = 0; c < curveSegments; c++) {
       const pt = curvePoints[c]

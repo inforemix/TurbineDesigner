@@ -3,7 +3,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, ContactShadows, Float } from '@react-three/drei'
 import * as THREE from 'three'
 import { useTurbineStore, MATERIAL_PRESETS } from '../../stores/turbineStore'
-import { catmullRomSpline } from '../../utils/spline'
+import { catmullRomSpline, sampleCurve } from '../../utils/spline'
 
 function easeOutCubic(t: number) { return 1 - Math.pow(1 - t, 3) }
 function easeOutBack(t: number) { const c1 = 1.70158; const c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2) }
@@ -24,6 +24,7 @@ function TurbineMesh() {
   const {
     bladePoints, bladeCount, height, twist, taper, thickness,
     windSpeed, isSpinning, symmetryMode, materialPreset, isTransitioning, transitionProgress, curveSmoothing,
+    chordCurve, twistCurve,
   } = useTurbineStore()
 
   const matConfig = MATERIAL_PRESETS[materialPreset]
@@ -47,8 +48,8 @@ function TurbineMesh() {
       for (let h = 0; h <= heightSegments; h++) {
         const hFrac = h / heightSegments
         const y = height * 0.25 + hFrac * height * 0.8
-        const twistAngle = twist * hFrac * (Math.PI / 180)
-        const taperScale = 1.0 - taper * Math.abs(hFrac - 0.5) * 2
+        const twistAngle = sampleCurve(twistCurve, hFrac) * 90 * (Math.PI / 180)
+        const taperScale = sampleCurve(chordCurve, hFrac)
         const helicalOffset = isHelical ? hFrac * Math.PI * 0.5 : 0
 
         for (let c = 0; c < curveSegments; c++) {
@@ -81,7 +82,7 @@ function TurbineMesh() {
     }
 
     return bladeGeometries
-  }, [bladePoints, bladeCount, height, twist, taper, thickness, symmetryMode, curveSmoothing])
+  }, [bladePoints, bladeCount, height, twist, taper, thickness, symmetryMode, curveSmoothing, chordCurve, twistCurve])
 
   // Materials
   const bladeMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({

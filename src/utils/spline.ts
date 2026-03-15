@@ -100,6 +100,27 @@ export function catmullRomSpline(
 }
 
 /**
+ * Sample a piecewise-linear distribution curve at parameter t (0→1)
+ * Points must be sorted by x. Returns the interpolated y value.
+ */
+export function sampleCurve(pts: Vec2[], t: number): number {
+  if (pts.length === 0) return 1
+  if (pts.length === 1) return pts[0].y
+  if (t <= pts[0].x) return pts[0].y
+  if (t >= pts[pts.length - 1].x) return pts[pts.length - 1].y
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i], b = pts[i + 1]
+    if (t >= a.x && t <= b.x) {
+      const span = b.x - a.x
+      if (span < 1e-9) return a.y
+      const f = (t - a.x) / span
+      return a.y + (b.y - a.y) * f
+    }
+  }
+  return pts[pts.length - 1].y
+}
+
+/**
  * Mirror a set of 2D points around the origin N times for kaleidoscope effect
  */
 export function mirrorPoints(

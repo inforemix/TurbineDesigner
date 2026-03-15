@@ -3,6 +3,7 @@ import { useTurbineStore } from './stores/turbineStore'
 import { usePuzzleStore } from './stores/puzzleStore'
 import Header from './components/ui/Header'
 import KaleidoscopeCanvas from './components/canvas/KaleidoscopeCanvas'
+import SideViewCanvas from './components/canvas/SideViewCanvas'
 import TurbineViewer from './components/viewer/TurbineViewer'
 import ParameterPanel from './components/ui/ParameterPanel'
 import PresetBrowser from './components/ui/PresetBrowser'
@@ -21,7 +22,7 @@ export default function App() {
   }, [updatePhysics])
 
   useEffect(() => {
-    if (prevModeRef.current === 'draw' && mode === 'view') {
+    if ((prevModeRef.current === 'draw' || prevModeRef.current === 'side') && mode === 'view') {
       setTransitioning(true)
       setTransitionProgress(0)
 
@@ -75,6 +76,10 @@ export default function App() {
                   </span>
                 </div>
               </div>
+            </div>
+          ) : mode === 'side' ? (
+            <div className="absolute inset-0">
+              <SideViewCanvas />
             </div>
           ) : (
             <div className="absolute inset-0">

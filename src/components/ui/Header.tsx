@@ -40,19 +40,27 @@ export default function Header() {
       <div className="flex items-center bg-surface rounded-lg border border-border/50 p-0.5">
         <button
           onClick={() => setMode('draw')}
-          className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all ${
+          className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
             mode === 'draw' ? 'bg-teal/20 text-teal shadow-sm' : 'text-text-muted hover:text-text'
           }`}
         >
           ✎ Draw
         </button>
         <button
+          onClick={() => setMode('side')}
+          className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+            mode === 'side' ? 'bg-teal/20 text-teal shadow-sm' : 'text-text-muted hover:text-text'
+          }`}
+        >
+          ⬜ Side
+        </button>
+        <button
           onClick={() => setMode('view')}
-          className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all ${
+          className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
             mode === 'view' ? 'bg-teal/20 text-teal shadow-sm' : 'text-text-muted hover:text-text'
           }`}
         >
-          ◇ View 3D
+          ◇ 3D
         </button>
       </div>
 

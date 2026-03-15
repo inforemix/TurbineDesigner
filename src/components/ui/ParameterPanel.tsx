@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTurbineStore, type BloomTier, type SymmetryMode, type MaterialPreset, MATERIAL_PRESETS } from '../../stores/turbineStore'
+import DistributionEditor from './DistributionEditor'
 import * as THREE from 'three'
 import { turbineCanvasRef, turbineGLRef, turbineSceneRef } from '../viewer/TurbineViewer'
 
@@ -73,7 +74,9 @@ async function handleExportGLB() {
       store.height,
       store.twist,
       store.taper,
-      store.thickness
+      store.thickness,
+      store.chordCurve,
+      store.twistCurve,
     )
     const blob = await exportToGLB(group)
     const url = URL.createObjectURL(blob)
@@ -113,8 +116,8 @@ export default function ParameterPanel() {
     bladeCount, setBladeCount,
     windSpeed, setWindSpeed,
     height, setHeight,
-    twist, setTwist,
-    taper, setTaper,
+    twist: _twist, setTwist: _setTwist,
+    taper: _taper, setTaper: _setTaper,
     thickness, setThickness,
     bloomTier,
     estimatedCp,
@@ -124,6 +127,11 @@ export default function ParameterPanel() {
     materialPreset, setMaterialPreset,
     curveSmoothing, setCurveSmoothing,
     mode,
+    chordCurve, setChordCurve,
+    twistCurve, setTwistCurve,
+    parametricMode, setParametricMode,
+    parametricCamber, parametricCamberPeak, parametricLeRadius, parametricTrailingSweep,
+    setParametric,
   } = useTurbineStore()
 
   const [exportingGLB, setExportingGLB] = useState(false)
@@ -191,16 +199,62 @@ export default function ParameterPanel() {
         </div>
       </div>
 
-      {/* Curve Detail (draw mode) */}
+      {/* Curve Detail + Parametric mode (draw mode) */}
       {mode === 'draw' && (
-        <Slider
-          label="Curve Detail"
-          value={curveSmoothing}
-          min={2}
-          max={20}
-          step={1}
-          onChange={setCurveSmoothing}
-        />
+        <>
+          <Slider
+            label="Curve Detail"
+            value={curveSmoothing}
+            min={2}
+            max={20}
+            step={1}
+            onChange={setCurveSmoothing}
+          />
+
+          {/* Parametric profile toggle */}
+          <div className="pt-2 border-t border-border/50">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] uppercase tracking-widest text-text-muted">Profile Shape</span>
+              <div className="flex items-center bg-surface rounded-lg border border-border/50 p-0.5">
+                <button
+                  onClick={() => setParametricMode(false)}
+                  className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all ${
+                    !parametricMode ? 'bg-teal/20 text-teal' : 'text-text-muted hover:text-text'
+                  }`}
+                >
+                  Draw
+                </button>
+                <button
+                  onClick={() => { setParametricMode(true); useTurbineStore.getState().applyParametric() }}
+                  className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all ${
+                    parametricMode ? 'bg-teal/20 text-teal' : 'text-text-muted hover:text-text'
+                  }`}
+                >
+                  Parametric
+                </button>
+              </div>
+            </div>
+
+            {parametricMode && (
+              <div className="flex flex-col gap-2">
+                <Slider label="Camber" value={parametricCamber} min={0} max={0.4} step={0.01}
+                  onChange={(v) => setParametric('parametricCamber', v)} />
+                <Slider label="Camber Peak" value={parametricCamberPeak} min={0.1} max={0.9} step={0.05}
+                  onChange={(v) => setParametric('parametricCamberPeak', v)} />
+                <Slider label="LE Radius" value={parametricLeRadius} min={0} max={0.3} step={0.01}
+                  onChange={(v) => setParametric('parametricLeRadius', v)} />
+                <Slider label="TE Sweep" value={parametricTrailingSweep} min={-0.3} max={0.3} step={0.01}
+                  onChange={(v) => setParametric('parametricTrailingSweep', v)} />
+                <button
+                  onClick={() => setParametricMode(false)}
+                  className="mt-1 py-1 rounded-lg text-[10px] font-medium border border-border/50 bg-surface text-text-dim hover:border-teal/30 hover:text-teal transition-all"
+                >
+                  Convert to Points
+                </button>
+              </div>
+            )}
+          </div>
+        </>
       )}
 
       {/* Wind */}
@@ -211,9 +265,23 @@ export default function ParameterPanel() {
         <span className="text-[10px] uppercase tracking-widest text-text-muted mb-2 block">Extrusion</span>
         <div className="flex flex-col gap-2.5">
           <Slider label="Height" value={height} min={0.5} max={3} step={0.1} onChange={setHeight} unit="m" />
-          <Slider label="Twist" value={twist} min={0} max={90} step={1} onChange={setTwist} unit="°" />
-          <Slider label="Taper" value={taper} min={0} max={0.8} step={0.05} onChange={setTaper} />
           <Slider label="Thickness" value={thickness} min={0.02} max={0.2} step={0.01} onChange={setThickness} />
+          <DistributionEditor
+            label="Chord Distribution"
+            points={chordCurve}
+            onChange={setChordCurve}
+            yMin={0.1}
+            yMax={1.5}
+            color="#2dd4bf"
+          />
+          <DistributionEditor
+            label="Twist Distribution"
+            points={twistCurve}
+            onChange={setTwistCurve}
+            yMin={0}
+            yMax={1}
+            color="#a78bfa"
+          />
         </div>
       </div>
 
