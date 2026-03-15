@@ -26,23 +26,19 @@ export default function App() {
       setTransitioning(true)
       setTransitionProgress(0)
 
-      let start: number | null = null
-      const duration = 1200 // extended for dramatic reveal
+      const duration = 1200
+      const startTime = performance.now()
 
-      const animate = (ts: number) => {
-        if (start === null) start = ts
-        const elapsed = ts - start
-        const progress = Math.min(1, elapsed / duration)
+      const tick = (now: number) => {
+        const progress = Math.min(1, (now - startTime) / duration)
         setTransitionProgress(progress)
-
         if (progress < 1) {
-          transitionTimerRef.current = requestAnimationFrame(animate)
+          transitionTimerRef.current = requestAnimationFrame(tick)
         } else {
           setTransitioning(false)
-          setTransitionProgress(1)
         }
       }
-      transitionTimerRef.current = requestAnimationFrame(animate)
+      transitionTimerRef.current = requestAnimationFrame(tick)
     }
     prevModeRef.current = mode
 
