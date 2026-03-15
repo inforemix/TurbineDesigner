@@ -5,8 +5,6 @@ import { usePuzzleStore } from '../../stores/puzzleStore'
 import MiniTurbineViewer from '../viewer/MiniTurbineViewer'
 
 const MAX_POINTS = 20
-import { catmullRomSpline, mirrorPoints } from '../../utils/spline'
-import { simplifyPath } from '../../utils/bezier'
 
 export default function KaleidoscopeCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -30,6 +28,7 @@ export default function KaleidoscopeCanvas() {
     history, historyIndex,
     snapToGrid, setSnapToGrid,
     clearBlade,
+    pushUndo,
   } = useTurbineStore()
 
   usePuzzleStore() // subscribe for potential future challenge target overlay
@@ -37,12 +36,6 @@ export default function KaleidoscopeCanvas() {
   const snapVal = useCallback((v: number) => {
     return snapToGrid ? Math.round(v / 0.05) * 0.05 : v
   }, [snapToGrid])
-    pushUndo,
-    undo,
-    redo,
-    canUndo,
-    canRedo,
-  } = useTurbineStore()
 
   // Keyboard shortcuts for undo/redo
   useEffect(() => {
@@ -131,7 +124,6 @@ export default function KaleidoscopeCanvas() {
       rawPointsRef.current.push(newPoint)
       addBladePoint(newPoint)
     }
-  }, [findNearestPoint, pixelToNormalized, addBladePoint, bladePoints.length])
   }, [findNearestPoint, pixelToNormalized, addBladePoint, pushUndo])
 
   const handleMove = useCallback((px: Vec2) => {
@@ -161,14 +153,7 @@ export default function KaleidoscopeCanvas() {
         if (dist > 0.06) addBladePoint(newPoint)
       }
     }
-  }, [dragIndex, isDrawing, bladePoints, pixelToNormalized, updateBladePoint, addBladePoint, snapVal])
-        if (dist > 0.008) {
-          rawPointsRef.current.push(newPoint)
-          addBladePoint(newPoint)
-        }
-      }
-    }
-  }, [dragIndex, isDrawing, pixelToNormalized, updateBladePoint, addBladePoint])
+  }, [dragIndex, isDrawing, pixelToNormalized, updateBladePoint, addBladePoint, snapVal])
 
   const handleUp = useCallback(() => {
     if (isDrawing && rawPointsRef.current.length > 2) {
@@ -191,9 +176,8 @@ export default function KaleidoscopeCanvas() {
     const sorted = [...currentPts].sort((a, b) => a.x - b.x)
     const simplified = simplifyPoints(sorted, 0.04)
     setBladePoints(simplified)
-  }, [setBladePoints])
     undoPushedRef.current = false
-  }, [isDrawing, setBladePoints])
+  }, [setBladePoints])
 
   // Right-click to delete point
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
@@ -282,13 +266,6 @@ export default function KaleidoscopeCanvas() {
         if (last) {
           const dist = Math.sqrt((newPoint.x - last.x) ** 2 + (newPoint.y - last.y) ** 2)
           if (dist > 0.06) addBladePoint(newPoint)
-        const last = rawPointsRef.current[rawPointsRef.current.length - 1]
-        if (last) {
-          const dist = Math.sqrt((newPoint.x - last.x) ** 2 + (newPoint.y - last.y) ** 2)
-          if (dist > 0.008) {
-            rawPointsRef.current.push(newPoint)
-            addBladePoint(newPoint)
-          }
         }
       }
     }
@@ -531,7 +508,6 @@ export default function KaleidoscopeCanvas() {
 
   return (
     <div className="relative w-full h-full">
-    <div className="w-full h-full relative">
       <canvas
         ref={canvasRef}
         className="w-full h-full cursor-crosshair"
@@ -605,7 +581,7 @@ export default function KaleidoscopeCanvas() {
             <MiniTurbineViewer />
           </div>
         )}
-      />
+      </div>
       {/* Undo/Redo buttons */}
       <div className="absolute top-3 right-3 flex gap-1.5">
         <button
