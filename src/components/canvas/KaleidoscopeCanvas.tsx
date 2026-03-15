@@ -1,6 +1,10 @@
 import { useRef, useEffect, useCallback, useState } from 'react'
 import { useTurbineStore, type Vec2 } from '../../stores/turbineStore'
-import { catmullRomSpline, mirrorPoints } from '../../utils/spline'
+import { catmullRomSpline, mirrorPoints, simplifyPoints } from '../../utils/spline'
+import { usePuzzleStore } from '../../stores/puzzleStore'
+import MiniTurbineViewer from '../viewer/MiniTurbineViewer'
+
+const MAX_POINTS = 20
 
 export default function KaleidoscopeCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -8,13 +12,25 @@ export default function KaleidoscopeCanvas() {
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const animFrameRef = useRef<number>(0)
   const timeRef = useRef(0)
+  const [showMiniPreview, setShowMiniPreview] = useState(false)
 
   const {
     bladePoints,
     setBladePoints,
     addBladePoint,
     updateBladePoint,
+    deleteBladePoint,
+    undo, redo,
+    history, historyIndex,
+    snapToGrid, setSnapToGrid,
+    clearBlade,
   } = useTurbineStore()
+
+  usePuzzleStore() // subscribe for potential future challenge target overlay
+
+  const snapVal = useCallback((v: number) => {
+    return snapToGrid ? Math.round(v / 0.05) * 0.05 : v
+  }, [snapToGrid])
 
   const getCanvasCoords = useCallback((e: React.MouseEvent | React.TouchEvent | TouchEvent, canvas: HTMLCanvasElement): Vec2 | null => {
     const rect = canvas.getBoundingClientRect()
@@ -27,10 +43,7 @@ export default function KaleidoscopeCanvas() {
       clientX = e.clientX
       clientY = e.clientY
     }
-    return {
-      x: clientX - rect.left,
-      y: clientY - rect.top,
-    }
+    return { x: clientX - rect.left, y: clientY - rect.top }
   }, [])
 
   const pixelToNormalized = useCallback((px: Vec2, canvas: HTMLCanvasElement): Vec2 => {
@@ -41,18 +54,17 @@ export default function KaleidoscopeCanvas() {
     const dy = px.y - cy
     const dist = Math.sqrt(dx * dx + dy * dy)
     const angle = Math.atan2(dy, dx)
-    // Map radial distance to x [0,1], angle offset to y
     return {
-      x: Math.min(1, dist / radius),
-      y: Math.max(-0.5, Math.min(0.5, (angle / (2 * Math.PI)) * 0.4)),
+      x: snapVal(Math.min(1, dist / radius)),
+      y: snapVal(Math.max(-0.5, Math.min(0.5, (angle / (2 * Math.PI)) * 0.4))),
     }
-  }, [])
+  }, [snapVal])
 
   const findNearestPoint = useCallback((px: Vec2, canvas: HTMLCanvasElement): number | null => {
     const cx = canvas.width / 2
     const cy = canvas.height / 2
     const radius = Math.min(cx, cy) * 0.75
-    const threshold = 15
+    const threshold = 18
 
     for (let i = 0; i < bladePoints.length; i++) {
       const pt = bladePoints[i]
@@ -73,6 +85,7 @@ export default function KaleidoscopeCanvas() {
     if (nearIdx !== null) {
       setDragIndex(nearIdx)
     } else {
+      if (bladePoints.length >= MAX_POINTS) return
       setIsDrawing(true)
       const norm = pixelToNormalized(px, canvas)
       const newPoint: Vec2 = {
@@ -81,7 +94,7 @@ export default function KaleidoscopeCanvas() {
       }
       addBladePoint(newPoint)
     }
-  }, [findNearestPoint, pixelToNormalized, addBladePoint])
+  }, [findNearestPoint, pixelToNormalized, addBladePoint, bladePoints.length])
 
   const handleMove = useCallback((px: Vec2) => {
     const canvas = canvasRef.current
@@ -92,11 +105,12 @@ export default function KaleidoscopeCanvas() {
       const cy = canvas.height / 2
       const radius = Math.min(cx, cy) * 0.75
       const updated: Vec2 = {
-        x: Math.max(0, Math.min(1, (px.x - cx) / radius)),
-        y: Math.max(0, Math.min(0.5, Math.abs((px.y - cy) / radius))),
+        x: Math.max(0, Math.min(1, snapVal((px.x - cx) / radius))),
+        y: Math.max(0, Math.min(0.5, Math.abs(snapVal((px.y - cy) / radius)))),
       }
       updateBladePoint(dragIndex, updated)
     } else if (isDrawing) {
+      if (bladePoints.length >= MAX_POINTS) return
       const norm = pixelToNormalized(px, canvas)
       const newPoint: Vec2 = {
         x: Math.max(0, Math.min(1, norm.x)),
@@ -105,17 +119,30 @@ export default function KaleidoscopeCanvas() {
       const last = bladePoints[bladePoints.length - 1]
       if (last) {
         const dist = Math.sqrt((newPoint.x - last.x) ** 2 + (newPoint.y - last.y) ** 2)
-        if (dist > 0.03) addBladePoint(newPoint)
+        if (dist > 0.06) addBladePoint(newPoint)
       }
     }
-  }, [dragIndex, isDrawing, bladePoints, pixelToNormalized, updateBladePoint, addBladePoint])
+  }, [dragIndex, isDrawing, bladePoints, pixelToNormalized, updateBladePoint, addBladePoint, snapVal])
 
   const handleUp = useCallback(() => {
     setIsDrawing(false)
     setDragIndex(null)
-    const sorted = [...useTurbineStore.getState().bladePoints].sort((a, b) => a.x - b.x)
-    setBladePoints(sorted)
+    const currentPts = useTurbineStore.getState().bladePoints
+    const sorted = [...currentPts].sort((a, b) => a.x - b.x)
+    const simplified = simplifyPoints(sorted, 0.04)
+    setBladePoints(simplified)
   }, [setBladePoints])
+
+  // Right-click to delete point
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const px = getCanvasCoords(e, canvas)
+    if (!px) return
+    const nearIdx = findNearestPoint(px, canvas)
+    if (nearIdx !== null) deleteBladePoint(nearIdx)
+  }, [getCanvasCoords, findNearestPoint, deleteBladePoint])
 
   // Mouse handlers
   const handlePointerDown = useCallback((e: React.MouseEvent) => {
@@ -132,11 +159,9 @@ export default function KaleidoscopeCanvas() {
     if (px) handleMove(px)
   }, [getCanvasCoords, handleMove])
 
-  const handlePointerUp = useCallback(() => {
-    handleUp()
-  }, [handleUp])
+  const handlePointerUp = useCallback(() => handleUp(), [handleUp])
 
-  // Touch handlers with proper passive:false for preventDefault
+  // Touch handlers
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -149,6 +174,7 @@ export default function KaleidoscopeCanvas() {
       if (nearIdx !== null) {
         setDragIndex(nearIdx)
       } else {
+        if (useTurbineStore.getState().bladePoints.length >= MAX_POINTS) return
         setIsDrawing(true)
         const norm = pixelToNormalized(px, canvas)
         addBladePoint({
@@ -162,7 +188,6 @@ export default function KaleidoscopeCanvas() {
       e.preventDefault()
       const px = getCanvasCoords(e, canvas)
       if (!px) return
-      // Read drag state from refs since this is a native listener
       const currentDragIndex = dragIndexRef.current
       const currentIsDrawing = isDrawingRef.current
 
@@ -170,21 +195,24 @@ export default function KaleidoscopeCanvas() {
         const cx = canvas.width / 2
         const cy = canvas.height / 2
         const radius = Math.min(cx, cy) * 0.75
+        const snap = useTurbineStore.getState().snapToGrid
+        const sv = (v: number) => snap ? Math.round(v / 0.05) * 0.05 : v
         updateBladePoint(currentDragIndex, {
-          x: Math.max(0, Math.min(1, (px.x - cx) / radius)),
-          y: Math.max(0, Math.min(0.5, Math.abs((px.y - cy) / radius))),
+          x: Math.max(0, Math.min(1, sv((px.x - cx) / radius))),
+          y: Math.max(0, Math.min(0.5, Math.abs(sv((px.y - cy) / radius)))),
         })
       } else if (currentIsDrawing) {
+        const pts = useTurbineStore.getState().bladePoints
+        if (pts.length >= MAX_POINTS) return
         const norm = pixelToNormalized(px, canvas)
         const newPoint: Vec2 = {
           x: Math.max(0, Math.min(1, norm.x)),
           y: Math.max(0, Math.min(0.5, Math.abs(norm.y))),
         }
-        const pts = useTurbineStore.getState().bladePoints
         const last = pts[pts.length - 1]
         if (last) {
           const dist = Math.sqrt((newPoint.x - last.x) ** 2 + (newPoint.y - last.y) ** 2)
-          if (dist > 0.03) addBladePoint(newPoint)
+          if (dist > 0.06) addBladePoint(newPoint)
         }
       }
     }
@@ -194,7 +222,8 @@ export default function KaleidoscopeCanvas() {
       setIsDrawing(false)
       setDragIndex(null)
       const sorted = [...useTurbineStore.getState().bladePoints].sort((a, b) => a.x - b.x)
-      setBladePoints(sorted)
+      const simplified = simplifyPoints(sorted, 0.04)
+      setBladePoints(simplified)
     }
 
     canvas.addEventListener('touchstart', onTouchStart, { passive: false })
@@ -210,7 +239,18 @@ export default function KaleidoscopeCanvas() {
     }
   }, [getCanvasCoords, findNearestPoint, pixelToNormalized, addBladePoint, updateBladePoint, setBladePoints])
 
-  // Refs for touch handlers to read latest state
+  // Keyboard shortcuts
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo() }
+        if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) { e.preventDefault(); redo() }
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [undo, redo])
+
   const dragIndexRef = useRef(dragIndex)
   const isDrawingRef = useRef(isDrawing)
   dragIndexRef.current = dragIndex
@@ -245,13 +285,30 @@ export default function KaleidoscopeCanvas() {
 
       ctx.clearRect(0, 0, w, h)
 
-      // Background radial gradient
+      // Background
       const bgGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 1.4)
       bgGrad.addColorStop(0, 'rgba(15, 22, 40, 1)')
       bgGrad.addColorStop(0.7, 'rgba(10, 14, 26, 1)')
       bgGrad.addColorStop(1, 'rgba(10, 14, 26, 1)')
       ctx.fillStyle = bgGrad
       ctx.fillRect(0, 0, w, h)
+
+      const store = useTurbineStore.getState()
+      const { bladePoints: pts, bladeCount: bc, curveSmoothing: cs, snapToGrid: snap } = store
+
+      // Snap grid dots
+      if (snap) {
+        ctx.fillStyle = 'rgba(45, 212, 191, 0.06)'
+        for (let gx = 0; gx <= 1.0; gx += 0.05) {
+          for (let gy = 0; gy <= 0.5; gy += 0.05) {
+            const wx = cx + gx * radius
+            const wy = cy + gy * radius
+            ctx.beginPath()
+            ctx.arc(wx, wy, 1, 0, Math.PI * 2)
+            ctx.fill()
+          }
+        }
+      }
 
       // Grid rings
       ctx.strokeStyle = 'rgba(45, 212, 191, 0.08)'
@@ -262,9 +319,8 @@ export default function KaleidoscopeCanvas() {
         ctx.stroke()
       }
 
-      // Radial lines for blade segments
+      // Radial lines
       ctx.strokeStyle = 'rgba(45, 212, 191, 0.06)'
-      const bc = useTurbineStore.getState().bladeCount
       for (let i = 0; i < bc; i++) {
         const angle = (i / bc) * Math.PI * 2
         ctx.beginPath()
@@ -274,9 +330,8 @@ export default function KaleidoscopeCanvas() {
       }
 
       // Draw mirrored blades
-      const pts = useTurbineStore.getState().bladePoints
       if (pts.length >= 2) {
-        const smooth = catmullRomSpline(pts, 10)
+        const smooth = catmullRomSpline(pts, cs)
         const mirrored = mirrorPoints(smooth, bc, cx, cy, radius)
 
         // Glow layer
@@ -296,8 +351,7 @@ export default function KaleidoscopeCanvas() {
           ctx.beginPath()
           ctx.moveTo(blade[0].x, blade[0].y)
           blade.forEach((p) => ctx.lineTo(p.x, p.y))
-
-          const tier = useTurbineStore.getState().bloomTier
+          const tier = store.bloomTier
           const alpha = tier === 'radiant' ? 0.95 : tier === 'flourishing' ? 0.85 : 0.7
           const hue = 174 + idx * (30 / bc)
           ctx.strokeStyle = `hsla(${hue}, 70%, 55%, ${alpha})`
@@ -305,24 +359,21 @@ export default function KaleidoscopeCanvas() {
           ctx.stroke()
         })
 
-        // Control points (only for first blade / master curve)
+        // Control points
         pts.forEach((pt, i) => {
           const worldX = cx + pt.x * radius
           const worldY = cy + pt.y * radius
 
-          // Outer glow
           ctx.beginPath()
           ctx.arc(worldX, worldY, 8, 0, Math.PI * 2)
           ctx.fillStyle = 'rgba(45, 212, 191, 0.2)'
           ctx.fill()
 
-          // Inner dot
           ctx.beginPath()
           ctx.arc(worldX, worldY, 4, 0, Math.PI * 2)
           ctx.fillStyle = i === 0 ? '#fbbf24' : '#2dd4bf'
           ctx.fill()
 
-          // Connecting line
           if (i > 0) {
             const prev = pts[i - 1]
             ctx.beginPath()
@@ -352,7 +403,7 @@ export default function KaleidoscopeCanvas() {
       ctx.fill()
 
       // Bloom tier indicator ring
-      const tier = useTurbineStore.getState().bloomTier
+      const tier = store.bloomTier
       const tierColors: Record<string, string> = {
         dormant: 'rgba(100, 116, 139, 0.2)',
         seedling: 'rgba(45, 212, 191, 0.25)',
@@ -366,6 +417,15 @@ export default function KaleidoscopeCanvas() {
       ctx.lineWidth = 2
       ctx.stroke()
 
+      // Point count warning
+      if (pts.length >= MAX_POINTS) {
+        ctx.font = '10px monospace'
+        ctx.fillStyle = 'rgba(251,191,36,0.8)'
+        ctx.textAlign = 'center'
+        ctx.fillText(`Max ${MAX_POINTS} points reached`, cx, h - 16)
+        ctx.textAlign = 'left'
+      }
+
       animFrameRef.current = requestAnimationFrame(render)
     }
 
@@ -375,17 +435,87 @@ export default function KaleidoscopeCanvas() {
       cancelAnimationFrame(animFrameRef.current)
       window.removeEventListener('resize', resize)
     }
-  }, []) // render loop runs independently, reads from store directly
+  }, [])
+
+  const canUndo = historyIndex > 0
+  const canRedo = historyIndex < history.length - 1
 
   return (
-    <canvas
-      ref={canvasRef}
-      className="w-full h-full cursor-crosshair"
-      style={{ touchAction: 'none' }}
-      onMouseDown={handlePointerDown}
-      onMouseMove={handlePointerMove}
-      onMouseUp={handlePointerUp}
-      onMouseLeave={handlePointerUp}
-    />
+    <div className="relative w-full h-full">
+      <canvas
+        ref={canvasRef}
+        className="w-full h-full cursor-crosshair"
+        style={{ touchAction: 'none' }}
+        onMouseDown={handlePointerDown}
+        onMouseMove={handlePointerMove}
+        onMouseUp={handlePointerUp}
+        onMouseLeave={handlePointerUp}
+        onContextMenu={handleContextMenu}
+      />
+
+      {/* Canvas toolbar — bottom left */}
+      <div className="absolute bottom-10 left-3 flex items-center gap-1.5 pointer-events-auto z-10">
+        <button
+          onClick={undo}
+          disabled={!canUndo}
+          title="Undo (Ctrl+Z)"
+          className="w-7 h-7 rounded-lg flex items-center justify-center text-xs transition-all border border-border/40 bg-surface/80 backdrop-blur-sm disabled:opacity-30 hover:border-teal/40 hover:text-teal text-text-dim"
+        >
+          ⟲
+        </button>
+        <button
+          onClick={redo}
+          disabled={!canRedo}
+          title="Redo (Ctrl+Y)"
+          className="w-7 h-7 rounded-lg flex items-center justify-center text-xs transition-all border border-border/40 bg-surface/80 backdrop-blur-sm disabled:opacity-30 hover:border-teal/40 hover:text-teal text-text-dim"
+        >
+          ⟳
+        </button>
+        <button
+          onClick={() => setSnapToGrid(!snapToGrid)}
+          title="Snap to grid"
+          className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs transition-all border bg-surface/80 backdrop-blur-sm ${
+            snapToGrid ? 'border-teal/50 text-teal' : 'border-border/40 text-text-dim hover:border-teal/30'
+          }`}
+        >
+          ⊞
+        </button>
+        <button
+          onClick={() => {
+            if (bladePoints.length > 0) clearBlade()
+          }}
+          title="Clear all points"
+          className="w-7 h-7 rounded-lg flex items-center justify-center text-xs transition-all border border-border/40 bg-surface/80 backdrop-blur-sm hover:border-red-500/40 hover:text-red-400 text-text-dim"
+        >
+          ✕
+        </button>
+
+        {/* Point counter */}
+        <span
+          className="text-[9px] px-1.5 py-0.5 rounded bg-surface/80 border border-border/40 text-text-muted backdrop-blur-sm"
+          style={{ color: bladePoints.length >= MAX_POINTS ? '#fbbf24' : undefined }}
+        >
+          {bladePoints.length}/{MAX_POINTS} pts
+        </span>
+      </div>
+
+      {/* Mini 3D preview toggle — bottom right */}
+      <div className="absolute bottom-10 right-3 flex flex-col items-end gap-2 pointer-events-auto z-10">
+        <button
+          onClick={() => setShowMiniPreview(v => !v)}
+          title="Toggle 3D preview"
+          className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all border backdrop-blur-sm ${
+            showMiniPreview ? 'border-teal/50 text-teal bg-teal/10' : 'border-border/40 text-text-dim bg-surface/80 hover:border-teal/30'
+          }`}
+        >
+          ◇ 3D Preview
+        </button>
+        {showMiniPreview && (
+          <div className="rounded-xl overflow-hidden shadow-2xl border border-teal/20">
+            <MiniTurbineViewer />
+          </div>
+        )}
+      </div>
+    </div>
   )
 }

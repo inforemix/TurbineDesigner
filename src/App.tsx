@@ -1,30 +1,32 @@
 import { useEffect, useRef } from 'react'
 import { useTurbineStore } from './stores/turbineStore'
+import { usePuzzleStore } from './stores/puzzleStore'
 import Header from './components/ui/Header'
 import KaleidoscopeCanvas from './components/canvas/KaleidoscopeCanvas'
 import TurbineViewer from './components/viewer/TurbineViewer'
 import ParameterPanel from './components/ui/ParameterPanel'
 import PresetBrowser from './components/ui/PresetBrowser'
+import PuzzleHUD from './components/puzzle/PuzzleHUD'
+import ChallengeList from './components/puzzle/ChallengeList'
+import Celebration from './components/puzzle/Celebration'
 
 export default function App() {
   const { mode, updatePhysics, setTransitioning, setTransitionProgress } = useTurbineStore()
+  const { showChallengeList } = usePuzzleStore()
   const prevModeRef = useRef(mode)
   const transitionTimerRef = useRef<number | null>(null)
 
-  // Initialize physics on mount
   useEffect(() => {
     updatePhysics()
   }, [updatePhysics])
 
-  // Bloom transition when switching to 3D view
   useEffect(() => {
     if (prevModeRef.current === 'draw' && mode === 'view') {
-      // Start bloom transition animation
       setTransitioning(true)
       setTransitionProgress(0)
 
       let start: number | null = null
-      const duration = 800 // ms
+      const duration = 1200 // extended for dramatic reveal
 
       const animate = (ts: number) => {
         if (start === null) start = ts
@@ -44,9 +46,7 @@ export default function App() {
     prevModeRef.current = mode
 
     return () => {
-      if (transitionTimerRef.current) {
-        cancelAnimationFrame(transitionTimerRef.current)
-      }
+      if (transitionTimerRef.current) cancelAnimationFrame(transitionTimerRef.current)
     }
   }, [mode, setTransitioning, setTransitionProgress])
 
@@ -65,11 +65,13 @@ export default function App() {
           {mode === 'draw' ? (
             <div className="absolute inset-0">
               <KaleidoscopeCanvas />
+              {/* Puzzle HUD overlay */}
+              <PuzzleHUD />
               {/* Drawing hints overlay */}
               <div className="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-none">
                 <div className="bg-surface/80 backdrop-blur-sm rounded-full px-4 py-1.5 border border-border/40">
                   <span className="text-[10px] text-text-muted">
-                    Click to add points · Drag to reshape · Points auto-sort by radius
+                    Click to add · Drag to reshape · Right-click to delete · Ctrl+Z to undo
                   </span>
                 </div>
               </div>
@@ -77,7 +79,6 @@ export default function App() {
           ) : (
             <div className="absolute inset-0">
               <TurbineViewer />
-              {/* 3D hints overlay */}
               <div className="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-none">
                 <div className="bg-surface/80 backdrop-blur-sm rounded-full px-4 py-1.5 border border-border/40">
                   <span className="text-[10px] text-text-muted">
@@ -102,6 +103,10 @@ export default function App() {
 
       {/* Mobile bottom bar */}
       <MobileBottomBar />
+
+      {/* Global overlays */}
+      {showChallengeList && <ChallengeList />}
+      <Celebration />
     </div>
   )
 }

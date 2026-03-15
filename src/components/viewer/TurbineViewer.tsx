@@ -5,23 +5,25 @@ import * as THREE from 'three'
 import { useTurbineStore, MATERIAL_PRESETS } from '../../stores/turbineStore'
 import { catmullRomSpline } from '../../utils/spline'
 
+function easeOutCubic(t: number) { return 1 - Math.pow(1 - t, 3) }
+function easeOutBack(t: number) { const c1 = 1.70158; const c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2) }
+
 function TurbineMesh() {
   const groupRef = useRef<THREE.Group>(null)
+  const shaftRef = useRef<THREE.Mesh>(null)
+  const bladeRefs = useRef<(THREE.Mesh | null)[]>([])
+  const strutGroupRef = useRef<THREE.Group>(null)
   const spinRef = useRef(0)
-  const bloomRef = useRef(0) // bloom transition progress 0→1
+
+  // Per-part reveal progress (0→1)
+  const shaftReveal = useRef(0)
+  const bladeReveals = useRef<number[]>([])
+  const strutReveal = useRef(0)
+  const wireframeOpacity = useRef(0.8)
 
   const {
-    bladePoints,
-    bladeCount,
-    height,
-    twist,
-    taper,
-    thickness,
-    windSpeed,
-    isSpinning,
-    symmetryMode,
-    materialPreset,
-    isTransitioning,
+    bladePoints, bladeCount, height, twist, taper, thickness,
+    windSpeed, isSpinning, symmetryMode, materialPreset, isTransitioning, transitionProgress, curveSmoothing,
   } = useTurbineStore()
 
   const matConfig = MATERIAL_PRESETS[materialPreset]
@@ -30,7 +32,7 @@ function TurbineMesh() {
   const meshData = useMemo(() => {
     if (bladePoints.length < 2) return null
 
-    const smooth = catmullRomSpline(bladePoints, 8)
+    const smooth = catmullRomSpline(bladePoints, curveSmoothing)
     const bladeRadius = 0.6
     const heightSegments = 24
     const curveSegments = smooth.length
@@ -47,8 +49,6 @@ function TurbineMesh() {
         const y = height * 0.25 + hFrac * height * 0.8
         const twistAngle = twist * hFrac * (Math.PI / 180)
         const taperScale = 1.0 - taper * Math.abs(hFrac - 0.5) * 2
-
-        // Helical: add progressive angular offset per height slice
         const helicalOffset = isHelical ? hFrac * Math.PI * 0.5 : 0
 
         for (let c = 0; c < curveSegments; c++) {
@@ -58,9 +58,7 @@ function TurbineMesh() {
           const totalTwist = twistAngle + helicalOffset
           const cos = Math.cos(totalTwist)
           const sin = Math.sin(totalTwist)
-          const localX = radialDist
-          const localZ = camber
-          positions.push(localX * cos - localZ * sin, y, localX * sin + localZ * cos)
+          positions.push(radialDist * cos - camber * sin, y, radialDist * sin + camber * cos)
         }
       }
 
@@ -78,36 +76,110 @@ function TurbineMesh() {
       geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
       geo.setIndex(indices)
       geo.computeVertexNormals()
-
-      const angle = (b / bladeCount) * Math.PI * 2
-      geo.rotateY(angle)
-
+      geo.rotateY((b / bladeCount) * Math.PI * 2)
       bladeGeometries.push(geo)
     }
 
     return bladeGeometries
-  }, [bladePoints, bladeCount, height, twist, taper, thickness, symmetryMode])
+  }, [bladePoints, bladeCount, height, twist, taper, thickness, symmetryMode, curveSmoothing])
 
-  // Spin + bloom transition animation
+  // Materials
+  const bladeMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
+    color: matConfig.color,
+    metalness: matConfig.metalness,
+    roughness: matConfig.roughness,
+    opacity: matConfig.opacity,
+    transparent: matConfig.transparent,
+    emissive: matConfig.emissiveIntensity > 0 ? matConfig.color : '#000000',
+    emissiveIntensity: matConfig.emissiveIntensity,
+    side: THREE.DoubleSide,
+    clearcoat: materialPreset === 'carbon-fiber' ? 0.8 : 0,
+    clearcoatRoughness: 0.2,
+  }), [matConfig, materialPreset])
+
+  const wireframeMaterial = useMemo(() => new THREE.MeshBasicMaterial({
+    color: '#2dd4bf',
+    wireframe: true,
+    transparent: true,
+    opacity: 0,
+  }), [])
+
+  const strutMaterial = useMemo(() => new THREE.MeshStandardMaterial({
+    color: '#64748b',
+    metalness: 0.7,
+    roughness: 0.3,
+  }), [])
+
+  // Initialize blade reveals array
+  if (bladeReveals.current.length !== bladeCount) {
+    bladeReveals.current = Array(bladeCount).fill(0)
+  }
+
   useFrame((_, delta) => {
     if (!groupRef.current) return
 
-    // Bloom transition: scale up from 0 when transitioning
-    if (isTransitioning) {
-      bloomRef.current = Math.min(1, bloomRef.current + delta * 1.8)
-      const eased = 1 - Math.pow(1 - bloomRef.current, 3) // ease-out cubic
-      groupRef.current.scale.setScalar(eased)
-      groupRef.current.position.y = (1 - eased) * -0.5
-    } else {
-      // Ensure fully visible
-      if (bloomRef.current < 1) {
-        bloomRef.current = Math.min(1, bloomRef.current + delta * 3)
-        const eased = 1 - Math.pow(1 - bloomRef.current, 3)
-        groupRef.current.scale.setScalar(eased)
-        groupRef.current.position.y = (1 - eased) * -0.5
+    // Staggered reveal animation
+    if (isTransitioning || transitionProgress < 1) {
+      const tp = transitionProgress // 0→1
+
+      // Shaft: first 0→0.5 of transition
+      const shaftT = Math.max(0, Math.min(1, tp / 0.5))
+      shaftReveal.current = easeOutCubic(shaftT)
+
+      // Blades: stagger across 0.2→0.85
+      for (let i = 0; i < bladeCount; i++) {
+        const start = 0.2 + i * (0.55 / Math.max(1, bladeCount))
+        const end = start + 0.3
+        const bladeT = Math.max(0, Math.min(1, (tp - start) / (end - start)))
+        bladeReveals.current[i] = easeOutBack(bladeT)
       }
+
+      // Struts: last 30% of transition
+      const strutT = Math.max(0, Math.min(1, (tp - 0.7) / 0.3))
+      strutReveal.current = easeOutBack(strutT)
+
+      // Wireframe: fades in then out over first 50% of each part's reveal
+      wireframeOpacity.current = tp < 0.5 ? Math.sin(tp * Math.PI) * 0.7 : 0
+
+      // Apply to shaft
+      if (shaftRef.current) {
+        const s = shaftReveal.current
+        shaftRef.current.scale.setScalar(Math.max(0.001, s))
+        shaftRef.current.position.y = (1 - s) * -0.3
+      }
+
+      // Apply to blades
+      bladeRefs.current.forEach((mesh, i) => {
+        if (!mesh) return
+        const s = bladeReveals.current[i] ?? 0
+        mesh.scale.setScalar(Math.max(0.001, s))
+      })
+
+      // Apply to struts
+      if (strutGroupRef.current) {
+        const s = strutReveal.current
+        strutGroupRef.current.scale.setScalar(Math.max(0.001, s))
+        strutGroupRef.current.position.y = (1 - s) * -0.2
+      }
+
+      // Wireframe effect on blades
+      wireframeMaterial.opacity = wireframeOpacity.current
+
+    } else {
+      // Fully revealed — reset all
+      if (shaftRef.current) {
+        shaftRef.current.scale.setScalar(1)
+        shaftRef.current.position.y = 0
+      }
+      bladeRefs.current.forEach(m => { if (m) m.scale.setScalar(1) })
+      if (strutGroupRef.current) {
+        strutGroupRef.current.scale.setScalar(1)
+        strutGroupRef.current.position.y = 0
+      }
+      wireframeMaterial.opacity = 0
     }
 
+    // Spinning
     if (isSpinning) {
       const optTSR = (4 * Math.PI) / bladeCount
       const rpm = (windSpeed * optTSR) / (0.6 * 2 * Math.PI) * 60
@@ -117,67 +189,50 @@ function TurbineMesh() {
     }
   })
 
-  const bladeMaterial = useMemo(() => {
-    return new THREE.MeshPhysicalMaterial({
-      color: matConfig.color,
-      metalness: matConfig.metalness,
-      roughness: matConfig.roughness,
-      opacity: matConfig.opacity,
-      transparent: matConfig.transparent,
-      emissive: matConfig.emissiveIntensity > 0 ? matConfig.color : '#000000',
-      emissiveIntensity: matConfig.emissiveIntensity,
-      side: THREE.DoubleSide,
-      clearcoat: materialPreset === 'carbon-fiber' ? 0.8 : 0,
-      clearcoatRoughness: 0.2,
-    })
-  }, [matConfig, materialPreset])
-
-  const strutMaterial = useMemo(() => new THREE.MeshStandardMaterial({
-    color: '#64748b',
-    metalness: 0.7,
-    roughness: 0.3,
-  }), [])
-
   if (!meshData) return null
 
   return (
     <group ref={groupRef}>
       {/* Central shaft */}
-      <mesh position={[0, height * 0.65, 0]} material={strutMaterial}>
+      <mesh ref={shaftRef} position={[0, height * 0.65, 0]} material={strutMaterial}>
         <cylinderGeometry args={[0.04, 0.04, height * 1.3, 16]} />
       </mesh>
 
-      {/* Blades */}
+      {/* Blades with wireframe overlay */}
       {meshData.map((geo, i) => (
-        <mesh key={i} geometry={geo} material={bladeMaterial} />
+        <group key={i}>
+          <mesh
+            ref={el => { bladeRefs.current[i] = el }}
+            geometry={geo}
+            material={bladeMaterial}
+          />
+          <mesh geometry={geo} material={wireframeMaterial} />
+        </group>
       ))}
 
-      {/* Top & bottom strut rings */}
-      <mesh position={[0, height * 1.05, 0]} rotation={[Math.PI / 2, 0, 0]} material={strutMaterial}>
-        <torusGeometry args={[0.18, 0.012, 8, 32]} />
-      </mesh>
-      <mesh position={[0, height * 0.25, 0]} rotation={[Math.PI / 2, 0, 0]} material={strutMaterial}>
-        <torusGeometry args={[0.18, 0.012, 8, 32]} />
-      </mesh>
+      {/* Top & bottom strut rings + radial struts */}
+      <group ref={strutGroupRef}>
+        <mesh position={[0, height * 1.05, 0]} rotation={[Math.PI / 2, 0, 0]} material={strutMaterial}>
+          <torusGeometry args={[0.18, 0.012, 8, 32]} />
+        </mesh>
+        <mesh position={[0, height * 0.25, 0]} rotation={[Math.PI / 2, 0, 0]} material={strutMaterial}>
+          <torusGeometry args={[0.18, 0.012, 8, 32]} />
+        </mesh>
 
-      {/* Radial struts */}
-      {Array.from({ length: bladeCount }).map((_, b) => {
-        const angle = (b / bladeCount) * Math.PI * 2
-        return [height * 0.25, height * 1.05].map((yPos, si) => (
-          <mesh
-            key={`strut-${b}-${si}`}
-            position={[
-              Math.cos(angle) * 0.22,
-              yPos,
-              Math.sin(angle) * 0.22,
-            ]}
-            rotation={[0, -angle + Math.PI / 2, Math.PI / 2]}
-            material={strutMaterial}
-          >
-            <cylinderGeometry args={[0.008, 0.008, 0.4, 6]} />
-          </mesh>
-        ))
-      })}
+        {Array.from({ length: bladeCount }).map((_, b) => {
+          const angle = (b / bladeCount) * Math.PI * 2
+          return [height * 0.25, height * 1.05].map((yPos, si) => (
+            <mesh
+              key={`strut-${b}-${si}`}
+              position={[Math.cos(angle) * 0.22, yPos, Math.sin(angle) * 0.22]}
+              rotation={[0, -angle + Math.PI / 2, Math.PI / 2]}
+              material={strutMaterial}
+            >
+              <cylinderGeometry args={[0.008, 0.008, 0.4, 6]} />
+            </mesh>
+          ))
+        })}
+      </group>
     </group>
   )
 }
@@ -185,28 +240,71 @@ function TurbineMesh() {
 function BloomTransitionOverlay() {
   const { isTransitioning, transitionProgress } = useTurbineStore()
   const meshRef = useRef<THREE.Mesh>(null)
+  const scanRef = useRef<THREE.Mesh>(null)
   const { viewport } = useThree()
 
   useFrame((_, delta) => {
-    if (!meshRef.current) return
+    if (!meshRef.current || !scanRef.current) return
     const mat = meshRef.current.material as THREE.MeshBasicMaterial
+    const scanMat = scanRef.current.material as THREE.MeshBasicMaterial
+
     if (isTransitioning) {
       // Flash then fade
       const flash = transitionProgress < 0.3
         ? transitionProgress / 0.3
         : 1 - ((transitionProgress - 0.3) / 0.7)
-      mat.opacity = Math.max(0, flash * 0.3)
+      mat.opacity = Math.max(0, flash * 0.25)
+
+      // Scan line sweeps up during first 60% of transition
+      if (transitionProgress < 0.6) {
+        const scanProg = transitionProgress / 0.6
+        const scanY = -viewport.height / 2 + scanProg * viewport.height * 1.2
+        scanRef.current.position.y = scanY
+        scanMat.opacity = 0.5 * (1 - scanProg * scanProg)
+      } else {
+        scanMat.opacity = 0
+      }
     } else {
       mat.opacity = Math.max(0, mat.opacity - delta * 2)
+      scanMat.opacity = Math.max(0, scanMat.opacity - delta * 3)
     }
   })
 
   return (
-    <mesh ref={meshRef} position={[0, 0, -1]}>
-      <planeGeometry args={[viewport.width * 2, viewport.height * 2]} />
-      <meshBasicMaterial color="#2dd4bf" transparent opacity={0} depthTest={false} />
-    </mesh>
+    <>
+      <mesh ref={meshRef} position={[0, 0, -1]}>
+        <planeGeometry args={[viewport.width * 2, viewport.height * 2]} />
+        <meshBasicMaterial color="#2dd4bf" transparent opacity={0} depthTest={false} />
+      </mesh>
+      {/* Horizontal scan line */}
+      <mesh ref={scanRef} position={[0, -viewport.height / 2, -0.5]}>
+        <planeGeometry args={[viewport.width * 2, 0.04]} />
+        <meshBasicMaterial color="#5eead4" transparent opacity={0} depthTest={false} />
+      </mesh>
+    </>
   )
+}
+
+function CinematicCamera() {
+  const { isTransitioning, transitionProgress } = useTurbineStore()
+  const { camera } = useThree()
+  const prevTransitioning = useRef(false)
+  const farPos = useMemo(() => new THREE.Vector3(4.5, 3.5, 4.5), [])
+  const targetPos = useMemo(() => new THREE.Vector3(1.8, 1.6, 1.8), [])
+  const lookTarget = useMemo(() => new THREE.Vector3(0, 0.8, 0), [])
+
+  useFrame(() => {
+    if (isTransitioning) {
+      if (!prevTransitioning.current) {
+        camera.position.copy(farPos)
+      }
+      const t = easeOutCubic(transitionProgress)
+      camera.position.lerpVectors(farPos, targetPos, t)
+      camera.lookAt(lookTarget)
+    }
+    prevTransitioning.current = isTransitioning
+  })
+  return null
 }
 
 function WindParticles() {
@@ -238,7 +336,6 @@ function WindParticles() {
       arr[i * 3] += velocities[i * 3] * speed * delta * 10
       arr[i * 3 + 1] += velocities[i * 3 + 1] * delta * 3
       arr[i * 3 + 2] += velocities[i * 3 + 2] * delta * 3
-
       if (arr[i * 3] > 2.5) {
         arr[i * 3] = -2.5
         arr[i * 3 + 1] = Math.random() * 2.5
@@ -251,10 +348,7 @@ function WindParticles() {
   return (
     <points ref={particlesRef}>
       <bufferGeometry>
-        <bufferAttribute
-          attach="attributes-position"
-          args={[positions, 3]}
-        />
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
       </bufferGeometry>
       <pointsMaterial
         size={0.02}
@@ -271,18 +365,13 @@ function GroundPlane() {
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
       <circleGeometry args={[3, 64]} />
-      <meshStandardMaterial
-        color="#0f1628"
-        metalness={0.1}
-        roughness={0.9}
-      />
+      <meshStandardMaterial color="#0f1628" metalness={0.1} roughness={0.9} />
     </mesh>
   )
 }
 
 // Expose canvas ref for PNG export
 export let turbineCanvasRef: HTMLCanvasElement | null = null
-// Expose GL for GLB export
 export let turbineSceneRef: THREE.Scene | null = null
 export let turbineGLRef: THREE.WebGLRenderer | null = null
 
@@ -304,7 +393,7 @@ function CanvasRefCapture({ onCanvas }: { onCanvas: (c: HTMLCanvasElement) => vo
 }
 
 export default function TurbineViewer() {
-  const { bloomTier } = useTurbineStore()
+  const { bloomTier, isTransitioning } = useTurbineStore()
 
   const bgColor = useMemo(() => {
     const colors: Record<string, string> = {
@@ -328,47 +417,34 @@ export default function TurbineViewer() {
           antialias: true,
           toneMapping: THREE.ACESFilmicToneMapping,
           toneMappingExposure: 1.2,
-          preserveDrawingBuffer: true, // needed for PNG export
+          preserveDrawingBuffer: true,
         }}
         shadows
       >
         <color attach="background" args={[bgColor]} />
         <fog attach="fog" args={[bgColor, 4, 12]} />
 
-        {/* Capture refs for export */}
         <SceneCapture />
         <CanvasRefCapture onCanvas={handleCanvas} />
 
+        {/* Cinematic camera fly-in */}
+        <CinematicCamera />
+
         {/* Lighting */}
         <ambientLight intensity={0.3} />
-        <directionalLight
-          position={[3, 5, 2]}
-          intensity={1.2}
-          castShadow
-          shadow-mapSize-width={1024}
-          shadow-mapSize-height={1024}
-        />
+        <directionalLight position={[3, 5, 2]} intensity={1.2} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
         <pointLight position={[-2, 3, -1]} intensity={0.4} color="#5eead4" />
         <pointLight position={[1, 0.5, 2]} intensity={0.2} color="#a78bfa" />
 
-        {/* Bloom transition flash overlay */}
         <BloomTransitionOverlay />
 
-        {/* Scene */}
         <Float speed={0.5} rotationIntensity={0} floatIntensity={0.3}>
           <TurbineMesh />
         </Float>
         <WindParticles />
         <GroundPlane />
-        <ContactShadows
-          position={[0, 0, 0]}
-          opacity={0.4}
-          scale={5}
-          blur={2.5}
-          far={3}
-        />
+        <ContactShadows position={[0, 0, 0]} opacity={0.4} scale={5} blur={2.5} far={3} />
 
-        {/* Controls */}
         <OrbitControls
           enableDamping
           dampingFactor={0.05}
@@ -378,6 +454,7 @@ export default function TurbineViewer() {
           maxPolarAngle={Math.PI / 2 + 0.3}
           autoRotate
           autoRotateSpeed={0.5}
+          enabled={!isTransitioning}
         />
       </Canvas>
     </div>

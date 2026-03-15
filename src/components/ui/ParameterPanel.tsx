@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTurbineStore, type BloomTier, type SymmetryMode, type MaterialPreset, MATERIAL_PRESETS } from '../../stores/turbineStore'
+import * as THREE from 'three'
 import { turbineCanvasRef, turbineGLRef, turbineSceneRef } from '../viewer/TurbineViewer'
 
 function Slider({
@@ -107,9 +108,6 @@ function handleExportPNG() {
   }
 }
 
-// Import THREE for camera type
-import * as THREE from 'three'
-
 export default function ParameterPanel() {
   const {
     bladeCount, setBladeCount,
@@ -124,6 +122,7 @@ export default function ParameterPanel() {
     isSpinning, setIsSpinning,
     symmetryMode, setSymmetryMode,
     materialPreset, setMaterialPreset,
+    curveSmoothing, setCurveSmoothing,
     mode,
   } = useTurbineStore()
 
@@ -191,6 +190,18 @@ export default function ParameterPanel() {
           ))}
         </div>
       </div>
+
+      {/* Curve Detail (draw mode) */}
+      {mode === 'draw' && (
+        <Slider
+          label="Curve Detail"
+          value={curveSmoothing}
+          min={2}
+          max={20}
+          step={1}
+          onChange={setCurveSmoothing}
+        />
+      )}
 
       {/* Wind */}
       <Slider label="Wind Speed" value={windSpeed} min={0} max={25} step={0.5} onChange={setWindSpeed} unit=" m/s" />

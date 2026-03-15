@@ -74,6 +74,8 @@ const PRESETS: Record<string, Vec2[]> = {
   ],
 }
 
+const MAX_HISTORY = 50
+
 interface TurbineState {
   // App mode
   mode: AppMode
@@ -91,6 +93,22 @@ interface TurbineState {
   addBladePoint: (pt: Vec2) => void
   updateBladePoint: (index: number, pt: Vec2) => void
   clearBlade: () => void
+  deleteBladePoint: (index: number) => void
+
+  // Undo/redo
+  history: Vec2[][]
+  historyIndex: number
+  pushHistory: () => void
+  undo: () => void
+  redo: () => void
+
+  // Drawing tools
+  snapToGrid: boolean
+  setSnapToGrid: (v: boolean) => void
+
+  // Curve smoothing
+  curveSmoothing: number
+  setCurveSmoothing: (v: number) => void
 
   // Symmetry
   bladeCount: number
@@ -141,18 +159,18 @@ function computeBloomTier(cp: number, windSpeed: number): BloomTier {
   return 'radiant'
 }
 
-function estimateCpFromCurve(points: Vec2[], bladeCount: number): number {
+export function estimateCpFromCurve(points: Vec2[], bladeCount: number): number {
   if (points.length < 2) return 0
-  // Simple heuristic: more camber = better drag capture, airfoil shape = better lift
   const maxCamber = Math.max(...points.map(p => p.y))
   const avgCamber = points.reduce((sum, p) => sum + p.y, 0) / points.length
-  const solidity = bladeCount * avgCamber * 2 // rough chord/radius
+  const solidity = bladeCount * avgCamber * 2
 
-  // Blend between drag-type and lift-type Cp curves
   const dragCp = Math.min(0.25, maxCamber * 0.8)
   const liftCp = Math.min(0.42, (1 - maxCamber) * 0.5 * Math.min(solidity, 1))
   return dragCp * 0.4 + liftCp * 0.6
 }
+
+let _skipHistoryPush = false
 
 export const useTurbineStore = create<TurbineState>((set, get) => ({
   mode: 'draw',
@@ -164,19 +182,71 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
   setTransitionProgress: (v) => set({ transitionProgress: v }),
 
   bladePoints: [...PRESETS['Breeze Petal']],
-  setBladePoints: (pts) => { set({ bladePoints: pts, activePreset: null }); get().updatePhysics() },
+  setBladePoints: (pts) => {
+    if (!_skipHistoryPush) get().pushHistory()
+    set({ bladePoints: pts, activePreset: null })
+    get().updatePhysics()
+  },
   addBladePoint: (pt) => {
+    if (!_skipHistoryPush) get().pushHistory()
     const pts = [...get().bladePoints, pt]
     set({ bladePoints: pts, activePreset: null })
     get().updatePhysics()
   },
   updateBladePoint: (index, pt) => {
+    if (!_skipHistoryPush) get().pushHistory()
     const pts = [...get().bladePoints]
     pts[index] = pt
     set({ bladePoints: pts, activePreset: null })
     get().updatePhysics()
   },
-  clearBlade: () => set({ bladePoints: [], activePreset: null }),
+  clearBlade: () => {
+    get().pushHistory()
+    set({ bladePoints: [], activePreset: null })
+    get().updatePhysics()
+  },
+  deleteBladePoint: (index) => {
+    get().pushHistory()
+    const pts = get().bladePoints.filter((_, i) => i !== index)
+    set({ bladePoints: pts, activePreset: null })
+    get().updatePhysics()
+  },
+
+  history: [],
+  historyIndex: -1,
+  pushHistory: () => {
+    const { bladePoints, history, historyIndex } = get()
+    const clone = bladePoints.map(p => ({ ...p }))
+    const trimmed = history.slice(0, historyIndex + 1)
+    const next = [...trimmed, clone].slice(-MAX_HISTORY)
+    set({ history: next, historyIndex: next.length - 1 })
+  },
+  undo: () => {
+    const { history, historyIndex } = get()
+    if (historyIndex <= 0) return
+    const newIndex = historyIndex - 1
+    const pts = history[newIndex].map(p => ({ ...p }))
+    _skipHistoryPush = true
+    set({ bladePoints: pts, historyIndex: newIndex, activePreset: null })
+    _skipHistoryPush = false
+    get().updatePhysics()
+  },
+  redo: () => {
+    const { history, historyIndex } = get()
+    if (historyIndex >= history.length - 1) return
+    const newIndex = historyIndex + 1
+    const pts = history[newIndex].map(p => ({ ...p }))
+    _skipHistoryPush = true
+    set({ bladePoints: pts, historyIndex: newIndex, activePreset: null })
+    _skipHistoryPush = false
+    get().updatePhysics()
+  },
+
+  snapToGrid: false,
+  setSnapToGrid: (v) => set({ snapToGrid: v }),
+
+  curveSmoothing: 8,
+  setCurveSmoothing: (v) => set({ curveSmoothing: v }),
 
   bladeCount: 3,
   setBladeCount: (n) => { set({ bladeCount: n }); get().updatePhysics() },
@@ -210,6 +280,7 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
   loadPreset: (name) => {
     const pts = PRESETS[name]
     if (pts) {
+      get().pushHistory()
       set({ bladePoints: [...pts], activePreset: name })
       get().updatePhysics()
     }
@@ -219,7 +290,7 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
     const { bladePoints, bladeCount, windSpeed } = get()
     const cp = estimateCpFromCurve(bladePoints, bladeCount)
     const optimalTSR = (4 * Math.PI) / bladeCount
-    const sweptArea = 1.0 // normalized
+    const sweptArea = 1.0
     const power = 0.5 * 1.225 * sweptArea * Math.pow(windSpeed, 3) * cp
     const tier = computeBloomTier(cp, windSpeed)
     set({
