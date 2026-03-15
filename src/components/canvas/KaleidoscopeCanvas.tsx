@@ -5,6 +5,8 @@ import { usePuzzleStore } from '../../stores/puzzleStore'
 import MiniTurbineViewer from '../viewer/MiniTurbineViewer'
 
 const MAX_POINTS = 20
+import { catmullRomSpline, mirrorPoints } from '../../utils/spline'
+import { simplifyPath } from '../../utils/bezier'
 
 export default function KaleidoscopeCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -13,6 +15,10 @@ export default function KaleidoscopeCanvas() {
   const animFrameRef = useRef<number>(0)
   const timeRef = useRef(0)
   const [showMiniPreview, setShowMiniPreview] = useState(false)
+  // Buffer raw drawn points before simplification
+  const rawPointsRef = useRef<Vec2[]>([])
+  // Track whether we pushed undo for this gesture
+  const undoPushedRef = useRef(false)
 
   const {
     bladePoints,
@@ -31,6 +37,31 @@ export default function KaleidoscopeCanvas() {
   const snapVal = useCallback((v: number) => {
     return snapToGrid ? Math.round(v / 0.05) * 0.05 : v
   }, [snapToGrid])
+    pushUndo,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+  } = useTurbineStore()
+
+  // Keyboard shortcuts for undo/redo
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const isMeta = e.metaKey || e.ctrlKey
+      if (isMeta && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        undo()
+      } else if (isMeta && e.key === 'z' && e.shiftKey) {
+        e.preventDefault()
+        redo()
+      } else if (isMeta && e.key === 'y') {
+        e.preventDefault()
+        redo()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [undo, redo])
 
   const getCanvasCoords = useCallback((e: React.MouseEvent | React.TouchEvent | TouchEvent, canvas: HTMLCanvasElement): Vec2 | null => {
     const rect = canvas.getBoundingClientRect()
@@ -83,18 +114,25 @@ export default function KaleidoscopeCanvas() {
     const nearIdx = findNearestPoint(px, canvas)
 
     if (nearIdx !== null) {
+      pushUndo()
+      undoPushedRef.current = true
       setDragIndex(nearIdx)
     } else {
       if (bladePoints.length >= MAX_POINTS) return
+      pushUndo()
+      undoPushedRef.current = true
       setIsDrawing(true)
+      rawPointsRef.current = []
       const norm = pixelToNormalized(px, canvas)
       const newPoint: Vec2 = {
         x: Math.max(0, Math.min(1, norm.x)),
         y: Math.max(0, Math.min(0.5, Math.abs(norm.y))),
       }
+      rawPointsRef.current.push(newPoint)
       addBladePoint(newPoint)
     }
   }, [findNearestPoint, pixelToNormalized, addBladePoint, bladePoints.length])
+  }, [findNearestPoint, pixelToNormalized, addBladePoint, pushUndo])
 
   const handleMove = useCallback((px: Vec2) => {
     const canvas = canvasRef.current
@@ -116,15 +154,37 @@ export default function KaleidoscopeCanvas() {
         x: Math.max(0, Math.min(1, norm.x)),
         y: Math.max(0, Math.min(0.5, Math.abs(norm.y))),
       }
-      const last = bladePoints[bladePoints.length - 1]
+      // Collect raw points with low threshold for smooth capture
+      const last = rawPointsRef.current[rawPointsRef.current.length - 1]
       if (last) {
         const dist = Math.sqrt((newPoint.x - last.x) ** 2 + (newPoint.y - last.y) ** 2)
         if (dist > 0.06) addBladePoint(newPoint)
       }
     }
   }, [dragIndex, isDrawing, bladePoints, pixelToNormalized, updateBladePoint, addBladePoint, snapVal])
+        if (dist > 0.008) {
+          rawPointsRef.current.push(newPoint)
+          addBladePoint(newPoint)
+        }
+      }
+    }
+  }, [dragIndex, isDrawing, pixelToNormalized, updateBladePoint, addBladePoint])
 
   const handleUp = useCallback(() => {
+    if (isDrawing && rawPointsRef.current.length > 2) {
+      // Simplify the drawn points using Ramer-Douglas-Peucker + sort
+      const existing = useTurbineStore.getState().bladePoints
+      // Identify the points that were drawn in this stroke (they're the last N points)
+      const strokeCount = rawPointsRef.current.length
+      const preExisting = existing.slice(0, existing.length - strokeCount)
+      const simplified = simplifyPath(rawPointsRef.current, 0.012)
+      const merged = [...preExisting, ...simplified].sort((a, b) => a.x - b.x)
+      setBladePoints(merged)
+    } else {
+      const sorted = [...useTurbineStore.getState().bladePoints].sort((a, b) => a.x - b.x)
+      setBladePoints(sorted)
+    }
+    rawPointsRef.current = []
     setIsDrawing(false)
     setDragIndex(null)
     const currentPts = useTurbineStore.getState().bladePoints
@@ -132,6 +192,8 @@ export default function KaleidoscopeCanvas() {
     const simplified = simplifyPoints(sorted, 0.04)
     setBladePoints(simplified)
   }, [setBladePoints])
+    undoPushedRef.current = false
+  }, [isDrawing, setBladePoints])
 
   // Right-click to delete point
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
@@ -172,15 +234,22 @@ export default function KaleidoscopeCanvas() {
       if (!px) return
       const nearIdx = findNearestPoint(px, canvas)
       if (nearIdx !== null) {
+        pushUndo()
+        undoPushedRef.current = true
         setDragIndex(nearIdx)
       } else {
         if (useTurbineStore.getState().bladePoints.length >= MAX_POINTS) return
+        pushUndo()
+        undoPushedRef.current = true
         setIsDrawing(true)
+        rawPointsRef.current = []
         const norm = pixelToNormalized(px, canvas)
-        addBladePoint({
+        const pt: Vec2 = {
           x: Math.max(0, Math.min(1, norm.x)),
           y: Math.max(0, Math.min(0.5, Math.abs(norm.y))),
-        })
+        }
+        rawPointsRef.current.push(pt)
+        addBladePoint(pt)
       }
     }
 
@@ -213,17 +282,37 @@ export default function KaleidoscopeCanvas() {
         if (last) {
           const dist = Math.sqrt((newPoint.x - last.x) ** 2 + (newPoint.y - last.y) ** 2)
           if (dist > 0.06) addBladePoint(newPoint)
+        const last = rawPointsRef.current[rawPointsRef.current.length - 1]
+        if (last) {
+          const dist = Math.sqrt((newPoint.x - last.x) ** 2 + (newPoint.y - last.y) ** 2)
+          if (dist > 0.008) {
+            rawPointsRef.current.push(newPoint)
+            addBladePoint(newPoint)
+          }
         }
       }
     }
 
     const onTouchEnd = (e: TouchEvent) => {
       e.preventDefault()
+      if (isDrawingRef.current && rawPointsRef.current.length > 2) {
+        const existing = useTurbineStore.getState().bladePoints
+        const strokeCount = rawPointsRef.current.length
+        const preExisting = existing.slice(0, existing.length - strokeCount)
+        const simplified = simplifyPath(rawPointsRef.current, 0.012)
+        const merged = [...preExisting, ...simplified].sort((a, b) => a.x - b.x)
+        setBladePoints(merged)
+      } else {
+        const sorted = [...useTurbineStore.getState().bladePoints].sort((a, b) => a.x - b.x)
+        setBladePoints(sorted)
+      }
+      rawPointsRef.current = []
       setIsDrawing(false)
       setDragIndex(null)
       const sorted = [...useTurbineStore.getState().bladePoints].sort((a, b) => a.x - b.x)
       const simplified = simplifyPoints(sorted, 0.04)
       setBladePoints(simplified)
+      undoPushedRef.current = false
     }
 
     canvas.addEventListener('touchstart', onTouchStart, { passive: false })
@@ -237,7 +326,7 @@ export default function KaleidoscopeCanvas() {
       canvas.removeEventListener('touchend', onTouchEnd)
       canvas.removeEventListener('touchcancel', onTouchEnd)
     }
-  }, [getCanvasCoords, findNearestPoint, pixelToNormalized, addBladePoint, updateBladePoint, setBladePoints])
+  }, [getCanvasCoords, findNearestPoint, pixelToNormalized, addBladePoint, updateBladePoint, setBladePoints, pushUndo])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -442,6 +531,7 @@ export default function KaleidoscopeCanvas() {
 
   return (
     <div className="relative w-full h-full">
+    <div className="w-full h-full relative">
       <canvas
         ref={canvasRef}
         className="w-full h-full cursor-crosshair"
@@ -515,6 +605,33 @@ export default function KaleidoscopeCanvas() {
             <MiniTurbineViewer />
           </div>
         )}
+      />
+      {/* Undo/Redo buttons */}
+      <div className="absolute top-3 right-3 flex gap-1.5">
+        <button
+          onClick={() => undo()}
+          disabled={!canUndo}
+          className="w-8 h-8 rounded-lg bg-surface/90 backdrop-blur-sm border border-border/50 text-text-dim
+            hover:text-teal hover:border-teal/30 disabled:opacity-30 disabled:cursor-not-allowed
+            flex items-center justify-center transition-all"
+          title="Undo (Ctrl+Z)"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 7v6h6" /><path d="M3 13a9 9 0 0 1 15.36-6.36" />
+          </svg>
+        </button>
+        <button
+          onClick={() => redo()}
+          disabled={!canRedo}
+          className="w-8 h-8 rounded-lg bg-surface/90 backdrop-blur-sm border border-border/50 text-text-dim
+            hover:text-teal hover:border-teal/30 disabled:opacity-30 disabled:cursor-not-allowed
+            flex items-center justify-center transition-all"
+          title="Redo (Ctrl+Shift+Z)"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 7v6h-6" /><path d="M21 13a9 9 0 0 0-15.36-6.36" />
+          </svg>
+        </button>
       </div>
     </div>
   )

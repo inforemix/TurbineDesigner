@@ -75,6 +75,22 @@ const PRESETS: Record<string, Vec2[]> = {
   ],
 }
 
+// Blade section: per-height overrides for twist and taper
+export interface BladeSection {
+  heightFraction: number // 0 (root) to 1 (tip)
+  twistOffset: number   // degrees offset from global twist at this height
+  taperScale: number    // multiplier (1.0 = no change)
+}
+
+const DEFAULT_SECTIONS: BladeSection[] = [
+  { heightFraction: 0.0, twistOffset: 0, taperScale: 1.0 },
+  { heightFraction: 0.25, twistOffset: 0, taperScale: 1.0 },
+  { heightFraction: 0.5, twistOffset: 0, taperScale: 1.0 },
+  { heightFraction: 0.75, twistOffset: 0, taperScale: 1.0 },
+  { heightFraction: 1.0, twistOffset: 0, taperScale: 1.0 },
+]
+
+// Max undo history
 const MAX_HISTORY = 50
 
 interface TurbineState {
@@ -110,6 +126,25 @@ interface TurbineState {
   // Curve smoothing
   curveSmoothing: number
   setCurveSmoothing: (v: number) => void
+
+  // Undo/Redo
+  undoStack: Vec2[][]
+  redoStack: Vec2[][]
+  pushUndo: () => void
+  undo: () => void
+  redo: () => void
+  canUndo: boolean
+  canRedo: boolean
+
+  // Blade sections (per-height twist/taper)
+  bladeSections: BladeSection[]
+  setBladeSections: (sections: BladeSection[]) => void
+  updateBladeSection: (index: number, section: Partial<BladeSection>) => void
+  resetBladeSections: () => void
+
+  // 2.5D section view
+  selectedSectionIndex: number
+  setSelectedSectionIndex: (i: number) => void
 
   // Symmetry
   bladeCount: number
@@ -265,6 +300,66 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
 
   curveSmoothing: 8,
   setCurveSmoothing: (v) => set({ curveSmoothing: v }),
+    get().pushUndo()
+    set({ bladePoints: [], activePreset: null })
+  },
+
+  // Undo/Redo
+  undoStack: [],
+  redoStack: [],
+  canUndo: false,
+  canRedo: false,
+  pushUndo: () => {
+    const { bladePoints, undoStack } = get()
+    const newStack = [...undoStack, bladePoints.map(p => ({ ...p }))]
+    if (newStack.length > MAX_HISTORY) newStack.shift()
+    set({ undoStack: newStack, redoStack: [], canUndo: true, canRedo: false })
+  },
+  undo: () => {
+    const { undoStack, bladePoints } = get()
+    if (undoStack.length === 0) return
+    const newUndo = [...undoStack]
+    const prev = newUndo.pop()!
+    const newRedo = [...get().redoStack, bladePoints.map(p => ({ ...p }))]
+    set({
+      bladePoints: prev,
+      undoStack: newUndo,
+      redoStack: newRedo,
+      activePreset: null,
+      canUndo: newUndo.length > 0,
+      canRedo: true,
+    })
+    get().updatePhysics()
+  },
+  redo: () => {
+    const { redoStack, bladePoints } = get()
+    if (redoStack.length === 0) return
+    const newRedo = [...redoStack]
+    const next = newRedo.pop()!
+    const newUndo = [...get().undoStack, bladePoints.map(p => ({ ...p }))]
+    set({
+      bladePoints: next,
+      undoStack: newUndo,
+      redoStack: newRedo,
+      activePreset: null,
+      canUndo: true,
+      canRedo: newRedo.length > 0,
+    })
+    get().updatePhysics()
+  },
+
+  // Blade sections
+  bladeSections: [...DEFAULT_SECTIONS],
+  setBladeSections: (sections) => set({ bladeSections: sections }),
+  updateBladeSection: (index, partial) => {
+    const sections = [...get().bladeSections]
+    sections[index] = { ...sections[index], ...partial }
+    set({ bladeSections: sections })
+  },
+  resetBladeSections: () => set({ bladeSections: [...DEFAULT_SECTIONS] }),
+
+  selectedSectionIndex: 2,
+  setSelectedSectionIndex: (i) => set({ selectedSectionIndex: i }),
 
   bladeCount: 3,
   setBladeCount: (n) => { set({ bladeCount: n }); get().updatePhysics() },
@@ -323,6 +418,7 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
     const pts = PRESETS[name]
     if (pts) {
       get().pushHistory()
+      get().pushUndo()
       set({ bladePoints: [...pts], activePreset: name })
       get().updatePhysics()
     }

@@ -25,6 +25,18 @@ function TurbineMesh() {
     bladePoints, bladeCount, height, twist, taper, thickness,
     windSpeed, isSpinning, symmetryMode, materialPreset, isTransitioning, transitionProgress, curveSmoothing,
     chordCurve, twistCurve,
+    bladePoints,
+    bladeCount,
+    height,
+    twist,
+    taper,
+    thickness,
+    windSpeed,
+    isSpinning,
+    symmetryMode,
+    materialPreset,
+    isTransitioning,
+    bladeSections,
   } = useTurbineStore()
 
   const matConfig = MATERIAL_PRESETS[materialPreset]
@@ -50,6 +62,30 @@ function TurbineMesh() {
         const y = height * 0.25 + hFrac * height * 0.8
         const twistAngle = sampleCurve(twistCurve, hFrac) * 90 * (Math.PI / 180)
         const taperScale = sampleCurve(chordCurve, hFrac)
+
+        // Interpolate section twist/taper from bladeSections
+        let sectionTwistOffset = 0
+        let sectionTaperScale = 1.0
+        if (bladeSections.length >= 2) {
+          // Find bracketing sections
+          let lo = 0
+          for (let s = 0; s < bladeSections.length - 1; s++) {
+            if (bladeSections[s + 1].heightFraction >= hFrac) { lo = s; break }
+            lo = s
+          }
+          const hi = Math.min(lo + 1, bladeSections.length - 1)
+          const loSec = bladeSections[lo]
+          const hiSec = bladeSections[hi]
+          const range = hiSec.heightFraction - loSec.heightFraction
+          const t = range > 0 ? (hFrac - loSec.heightFraction) / range : 0
+          sectionTwistOffset = loSec.twistOffset + (hiSec.twistOffset - loSec.twistOffset) * t
+          sectionTaperScale = loSec.taperScale + (hiSec.taperScale - loSec.taperScale) * t
+        }
+
+        const twistAngle = (twist * hFrac + sectionTwistOffset) * (Math.PI / 180)
+        const taperScale = (1.0 - taper * Math.abs(hFrac - 0.5) * 2) * sectionTaperScale
+
+        // Helical: add progressive angular offset per height slice
         const helicalOffset = isHelical ? hFrac * Math.PI * 0.5 : 0
 
         for (let c = 0; c < curveSegments; c++) {
@@ -115,6 +151,7 @@ function TurbineMesh() {
   if (bladeReveals.current.length !== bladeCount) {
     bladeReveals.current = Array(bladeCount).fill(0)
   }
+  }, [bladePoints, bladeCount, height, twist, taper, thickness, symmetryMode, bladeSections])
 
   useFrame((_, delta) => {
     if (!groupRef.current) return
