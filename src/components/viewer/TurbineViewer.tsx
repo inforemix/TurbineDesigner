@@ -3,6 +3,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, ContactShadows, Float } from '@react-three/drei'
 import * as THREE from 'three'
 import { useTurbineStore, MATERIAL_PRESETS } from '../../stores/turbineStore'
+import { useThemeStore } from '../../stores/themeStore'
 import { catmullRomSpline } from '../../utils/spline'
 
 function easeOutCubic(t: number) { return 1 - Math.pow(1 - t, 3) }
@@ -417,8 +418,12 @@ function CanvasRefCapture({ onCanvas }: { onCanvas: (c: HTMLCanvasElement) => vo
 
 export default function TurbineViewer() {
   const { bloomTier, isTransitioning } = useTurbineStore()
+  const { theme } = useThemeStore()
 
   const bgColor = useMemo(() => {
+    if (theme === 'light') {
+      return '#f8fafc'
+    }
     const colors: Record<string, string> = {
       dormant: '#0a0e1a',
       seedling: '#0b1020',
@@ -426,7 +431,7 @@ export default function TurbineViewer() {
       radiant: '#10152e',
     }
     return colors[bloomTier] || '#0a0e1a'
-  }, [bloomTier])
+  }, [bloomTier, theme])
 
   const handleCanvas = useCallback((c: HTMLCanvasElement) => {
     turbineCanvasRef = c
