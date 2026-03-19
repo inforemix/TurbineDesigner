@@ -83,10 +83,10 @@ function MetricRow({
 }) {
   return (
     <div className="flex items-center justify-between py-1.5">
-      <Label className="text-[10px] text-text-muted font-medium">{label}</Label>
+      <Label className="text-[10px] text-muted-foreground font-medium">{label}</Label>
       <span className="text-[11px] font-mono font-bold" style={{ color }}>
         {value}
-        {unit && <span className="text-text-dim text-[9px] ml-1">{unit}</span>}
+        {unit && <span className="text-secondary-foreground text-[9px] ml-1">{unit}</span>}
       </span>
     </div>
   )
@@ -131,7 +131,7 @@ export default function PhysicsDashboard() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <Label className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Physics Dashboard</Label>
+        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Physics Dashboard</Label>
         <Badge
           variant="outline"
           className="text-[9px] border-teal/30 text-teal bg-teal/10 font-semibold"
@@ -141,9 +141,9 @@ export default function PhysicsDashboard() {
       </div>
 
       {/* Power Curve Sparkline */}
-      <Card className="bg-surface/40 border-teal/20">
+      <Card className="bg-secondary/40 border-teal/20">
         <CardHeader className="p-3 pb-2">
-          <CardTitle className="text-[10px] text-text-muted flex justify-between font-semibold">
+          <CardTitle className="text-[10px] text-muted-foreground flex justify-between font-semibold">
             <span>Cp vs TSR Curve</span>
             <span className="text-teal font-mono">Cp<sub>max</sub>={peakCp.toFixed(3)}</span>
           </CardTitle>
@@ -155,7 +155,7 @@ export default function PhysicsDashboard() {
             color="#2dd4bf"
             peakX={peakTSR}
           />
-          <div className="flex justify-between text-[9px] text-text-dim mt-2">
+          <div className="flex justify-between text-[9px] text-secondary-foreground mt-2">
             <span>TSR 0</span>
             <span>optimal λ={peakTSR.toFixed(1)}</span>
             <span>7</span>
@@ -164,8 +164,8 @@ export default function PhysicsDashboard() {
       </Card>
 
       {/* Key metrics */}
-      <div className="flex flex-col gap-1 bg-surface/20 rounded-lg p-3 border border-border/20">
-        <div className="text-[9px] uppercase tracking-wider text-text-muted font-semibold mb-1">Key Metrics</div>
+      <div className="flex flex-col gap-1 bg-secondary/20 rounded-lg p-3 border border-border/20">
+        <div className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Key Metrics</div>
         <MetricRow label="Power coeff. Cp" value={result.cp.toFixed(3)} color="#2dd4bf" />
         <MetricRow label="Torque coeff. Cq" value={result.cq.toFixed(4)} color="#94a3b8" />
         <MetricRow label="Shaft power" value={result.power.toFixed(1)} unit="W" color="#fbbf24" />
@@ -177,8 +177,8 @@ export default function PhysicsDashboard() {
       <Separator className="bg-border/20" />
 
       {/* Secondary metrics */}
-      <div className="flex flex-col gap-1 bg-surface/20 rounded-lg p-3 border border-border/20">
-        <div className="text-[9px] uppercase tracking-wider text-text-muted font-semibold mb-1">Configuration</div>
+      <div className="flex flex-col gap-1 bg-secondary/20 rounded-lg p-3 border border-border/20">
+        <div className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Configuration</div>
         <MetricRow label="Wind speed" value={windSpeed.toFixed(1)} unit="m/s" />
         <MetricRow label="Swept area" value={(2 * radius * height).toFixed(2)} unit="m²" />
         <MetricRow label="Solidity σ" value={((bladeCount * chord) / (2 * radius)).toFixed(3)} />
@@ -186,18 +186,18 @@ export default function PhysicsDashboard() {
       </div>
 
       {/* Betz limit indicator */}
-      <div className="bg-surface/20 rounded-lg p-3 border border-teal/20">
-        <div className="flex justify-between text-[10px] text-text-muted mb-2 font-semibold">
+      <div className="bg-secondary/20 rounded-lg p-3 border border-teal/20">
+        <div className="flex justify-between text-[10px] text-muted-foreground mb-2 font-semibold">
           <span>Betz Efficiency</span>
           <span className="text-teal font-mono">{((result.cp / 0.593) * 100).toFixed(0)}%</span>
         </div>
-        <div className="h-2 bg-surface rounded-full overflow-hidden border border-border/20">
+        <div className="h-2 bg-secondary rounded-full overflow-hidden border border-border/20">
           <div
             className="h-full rounded-full bg-gradient-to-r from-teal via-teal-glow to-bloom-gold transition-all duration-500 shadow-lg"
             style={{ width: `${Math.min((result.cp / 0.593) * 100, 100)}%` }}
           />
         </div>
-        <div className="text-[9px] text-text-muted mt-2 text-right font-mono">Betz limit: 59.3%</div>
+        <div className="text-[9px] text-muted-foreground mt-2 text-right font-mono">Betz limit: 59.3%</div>
       </div>
     </div>
   )

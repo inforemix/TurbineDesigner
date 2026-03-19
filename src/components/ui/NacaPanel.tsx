@@ -76,14 +76,14 @@ export default function NacaPanel() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <Label className="text-[10px] uppercase tracking-wider text-text-muted font-semibold">Airfoil Profile</Label>
-        <Badge variant="outline" className="text-[9px] text-text-muted border-border/30 bg-surface/30">
+        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Airfoil Profile</Label>
+        <Badge variant="outline" className="text-[9px] text-muted-foreground border-border/30 bg-secondary/30">
           σ≈{solidity}
         </Badge>
       </div>
 
       {/* Profile preview */}
-      <div className="rounded-lg bg-surface/40 border border-teal/20 p-3">
+      <div className="rounded-lg bg-secondary/40 border border-teal/20 p-3">
         <AirfoilPreview code={selected} />
         <div className="text-center text-[10px] text-teal font-mono mt-2 font-bold">NACA {selected}</div>
       </div>
@@ -97,7 +97,7 @@ export default function NacaPanel() {
             className={`text-left px-3 py-2 rounded-lg text-[10px] font-semibold transition-all flex items-center justify-between border ${
               selected === preset.code
                 ? 'bg-teal/30 text-teal border-teal/40 shadow-sm'
-                : 'bg-surface/50 text-text-muted hover:bg-surface hover:border-teal/30 hover:text-teal'
+                : 'bg-secondary/50 text-muted-foreground hover:bg-secondary hover:border-teal/30 hover:text-teal'
             }`}
           >
             <span>{preset.label}</span>
@@ -110,7 +110,7 @@ export default function NacaPanel() {
 
       {/* Custom NACA input */}
       <div>
-        <Label className="text-[10px] uppercase tracking-wider text-text-muted block mb-2.5 font-semibold">Custom Code</Label>
+        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-2.5 font-semibold">Custom Code</Label>
         {editingCustom ? (
           <div className="flex gap-2">
             <input
@@ -118,7 +118,7 @@ export default function NacaPanel() {
               value={customCode}
               maxLength={4}
               onChange={(e) => setCustomCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
-              className="flex-1 bg-surface/60 border border-teal/30 rounded-lg px-2 py-2 text-xs font-mono text-teal text-center focus:outline-none focus:ring-1 focus:ring-teal/50 focus:border-teal/50"
+              className="flex-1 bg-secondary/60 border border-teal/30 rounded-lg px-2 py-2 text-xs font-mono text-teal text-center focus:outline-none focus:ring-1 focus:ring-teal/50 focus:border-teal/50"
               placeholder="4412"
             />
             <Button
@@ -134,7 +134,7 @@ export default function NacaPanel() {
             variant="outline"
             size="sm"
             onClick={() => setEditingCustom(true)}
-            className="w-full h-9 text-[10px] border border-teal/20 bg-surface/50 text-text-muted hover:border-teal/40 hover:text-teal hover:bg-surface font-semibold"
+            className="w-full h-9 text-[10px] border border-teal/20 bg-secondary/50 text-muted-foreground hover:border-teal/40 hover:text-teal hover:bg-secondary font-semibold"
           >
             + Enter NACA code
           </Button>

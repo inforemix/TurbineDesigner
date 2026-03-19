@@ -8,6 +8,13 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet" />
+    <!-- Apply saved theme before React mounts to avoid flash -->
+    <script>
+      try {
+        const s = JSON.parse(localStorage.getItem('turbine-theme') || '{}')
+        if (s.state?.theme === 'light') document.documentElement.classList.add('light')
+      } catch (_) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

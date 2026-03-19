@@ -174,8 +174,8 @@ export default function DistributionEditor({
     <div className="flex flex-col gap-1">
       {label && (
         <div className="flex justify-between items-center">
-          <span className="text-[11px] uppercase tracking-wider text-text-dim">{label}</span>
-          <span className="text-[10px] font-mono text-text-muted">
+          <span className="text-[11px] uppercase tracking-wider text-secondary-foreground">{label}</span>
+          <span className="text-[10px] font-mono text-muted-foreground">
             {rootY.toFixed(2)} → {tipY.toFixed(2)}
           </span>
         </div>
@@ -191,7 +191,7 @@ export default function DistributionEditor({
         onMouseLeave={onMouseUp}
         onContextMenu={onContextMenu}
       />
-      <span className="text-[9px] text-text-muted text-center">
+      <span className="text-[9px] text-muted-foreground text-center">
         Drag handles · Click to add · Right-click to remove
       </span>
     </div>
