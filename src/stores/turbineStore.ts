@@ -7,7 +7,7 @@ export interface Vec2 {
 }
 
 export type SymmetryMode = 'pinwheel' | 'snowflake' | 'helix' | 'freeform'
-export type AppMode = 'draw' | 'side' | 'view'
+export type AppMode = 'draw' | 'airfoil' | 'side' | 'view'
 export type BloomTier = 'dormant' | 'seedling' | 'flourishing' | 'radiant'
 
 export type MaterialPreset = 'teal-metal' | 'brushed-steel' | 'carbon-fiber' | 'copper-patina' | 'frosted-glass' | 'matte-white'

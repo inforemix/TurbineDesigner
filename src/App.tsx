@@ -15,6 +15,7 @@ import ChallengeList from './components/puzzle/ChallengeList'
 import Celebration from './components/puzzle/Celebration'
 import BladeSectionEditor from './components/editor/BladeSectionEditor'
 import SectionPreview from './components/editor/SectionPreview'
+import AirfoilBezierEditor from './components/editor/AirfoilBezierEditor'
 import { TooltipProvider } from './components/ui/tooltip'
 import { ScrollArea } from './components/ui/scroll-area'
 import { Button } from './components/ui/button'
@@ -113,6 +114,10 @@ export default function App() {
                   <CanvasHint text="Click to add · Drag to reshape · Ctrl+Z undo" />
                 </div>
                 <SectionPanel />
+              </div>
+            ) : mode === 'airfoil' ? (
+              <div className="flex-1 rounded-lg border border-border overflow-hidden bg-background min-h-0">
+                <AirfoilBezierEditor />
               </div>
             ) : mode === 'side' ? (
               <div className="flex-1 rounded-lg border border-border overflow-hidden bg-background">
