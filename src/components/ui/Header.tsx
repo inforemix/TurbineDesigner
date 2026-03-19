@@ -21,26 +21,26 @@ export default function Header() {
 
   return (
     <header
-      className="h-12 flex items-center justify-between px-5 border-b border-border/40 bg-deep/80 backdrop-blur-sm"
+      className="h-14 flex items-center justify-between px-6 border-b border-border/30 bg-surface/50 backdrop-blur-md"
       style={{ boxShadow: tierGlow[bloomTier] || 'none' }}
     >
       {/* Logo */}
-      <div className="flex items-center gap-2.5">
-        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-teal to-bloom-violet flex items-center justify-center">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal via-teal-glow to-bloom-violet flex items-center justify-center shadow-lg">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
             <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
           </svg>
         </div>
-        <span className="text-sm font-semibold tracking-wide text-text">
+        <span className="text-base font-bold tracking-tight text-text">
           Turbine<span className="text-teal">Bloom</span>
         </span>
-        <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 border-border/50 text-text-muted">
+        <Badge variant="outline" className="text-[8px] px-2 py-0.5 h-5 border-teal/30 text-teal bg-teal/8 font-medium">
           v0.3
         </Badge>
       </div>
 
       {/* Mode Toggle */}
-      <div className="flex items-center bg-surface rounded-lg border border-border/50 p-0.5">
+      <div className="flex items-center bg-surface/60 rounded-lg border border-teal/20 p-1 gap-1">
         {([
           { value: 'draw', icon: '✎', label: 'Draw' },
           { value: 'side', icon: '⬜', label: 'Side' },
@@ -49,8 +49,8 @@ export default function Header() {
           <button
             key={m.value}
             onClick={() => setMode(m.value)}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-              mode === m.value ? 'bg-teal/20 text-teal shadow-sm' : 'text-text-muted hover:text-text'
+            className={`px-3 py-2 rounded-md text-xs font-semibold transition-all ${
+              mode === m.value ? 'bg-teal/30 text-teal shadow-md' : 'text-text-muted hover:text-text hover:bg-white/5'
             }`}
           >
             {m.icon} {m.label}
@@ -61,9 +61,9 @@ export default function Header() {
       {/* Right section */}
       <div className="flex items-center gap-2">
         {activeChallenge && (
-          <Badge variant="outline" className="hidden sm:flex gap-1 text-[10px] text-teal border-teal/25 bg-teal/8">
+          <Badge variant="outline" className="hidden sm:flex gap-1.5 text-[10px] text-teal border-teal/30 bg-teal/10 px-3 py-1.5 font-semibold">
             <span>{activeChallenge.icon}</span>
-            <span className="max-w-[100px] truncate">{activeChallenge.title}</span>
+            <span className="max-w-[120px] truncate">{activeChallenge.title}</span>
           </Badge>
         )}
 
@@ -73,12 +73,12 @@ export default function Header() {
               variant="outline"
               size="sm"
               onClick={() => setShowChallengeList(!showChallengeList)}
-              className="h-7 px-3 text-xs border-border/50 bg-surface text-text-dim hover:border-teal/30 hover:text-teal"
+              className="h-9 px-4 text-xs border-teal/20 bg-surface/60 text-text-dim hover:border-teal/40 hover:text-teal hover:bg-surface font-semibold"
             >
               <span>⚡</span>
               <span className="hidden sm:inline">Challenges</span>
               {totalCompleted > 0 && (
-                <Badge className="text-[9px] h-4 px-1.5 bg-teal/20 text-teal border-teal/20">
+                <Badge className="text-[9px] h-5 px-2 bg-teal/30 text-teal border-teal/30 font-bold">
                   {totalCompleted}
                 </Badge>
               )}
