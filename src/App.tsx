@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Group as PanelGroup, Panel, Separator } from 'react-resizable-panels'
 import { useTurbineStore } from './stores/turbineStore'
 import { usePuzzleStore } from './stores/puzzleStore'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import Header from './components/ui/Header'
 import KaleidoscopeCanvas from './components/canvas/KaleidoscopeCanvas'
 import SideViewCanvas from './components/canvas/SideViewCanvas'
@@ -17,10 +17,13 @@ import BladeSectionEditor from './components/editor/BladeSectionEditor'
 import SectionPreview from './components/editor/SectionPreview'
 import { TooltipProvider } from './components/ui/tooltip'
 import { ScrollArea } from './components/ui/scroll-area'
+import { Button } from './components/ui/button'
 
 export default function App() {
   const { mode, updatePhysics, setTransitioning, setTransitionProgress } = useTurbineStore()
   const { showChallengeList } = usePuzzleStore()
+  const [leftOpen, setLeftOpen] = useState(true)
+  const [rightOpen, setRightOpen] = useState(true)
   const prevModeRef = useRef(mode)
   const transitionTimerRef = useRef<number | null>(null)
 
@@ -56,122 +59,52 @@ export default function App() {
       <div className="w-full h-full flex flex-col bg-background text-foreground">
         <Header />
 
-        {/* Desktop layout with resizable panels */}
-        <div className="hidden lg:flex flex-1 overflow-hidden">
-          <PanelGroup>
-            {/* Left sidebar */}
-            <Panel defaultSize={18} minSize={12} maxSize={32} className="bg-card border-r border-border">
-              <ScrollArea className="h-full">
-                <div className="p-4 space-y-6">
-                  <PresetBrowser />
-                  {mode === 'draw' && (
-                    <div className="border-t border-border pt-6">
-                      <NacaPanel />
-                    </div>
-                  )}
-                </div>
-              </ScrollArea>
-            </Panel>
-
-            <Separator />
-
-            {/* Main canvas */}
-            <Panel defaultSize={55} minSize={35}>
-              <div className="h-full flex flex-col p-4 gap-3">
-                {mode === 'draw' ? (
-                  <div className="flex-1 flex flex-col gap-3 min-h-0">
-                    <div className="flex-1 relative rounded-lg border border-border overflow-hidden bg-background min-h-0">
-                      <KaleidoscopeCanvas />
-                      <PuzzleHUD />
-                      <CanvasHint text="Click to add · Drag to reshape · Ctrl+Z undo" />
-                    </div>
-                    <SectionPanel />
+        {/* Main content area */}
+        <div className="flex-1 overflow-hidden flex">
+          {/* Desktop Left Sidebar */}
+          {leftOpen && (
+            <>
+              <div className="hidden md:flex md:flex-col w-64 bg-card border-r border-border">
+                <ScrollArea className="flex-1">
+                  <div className="p-4 space-y-6">
+                    <PresetBrowser />
+                    {mode === 'draw' && (
+                      <div className="border-t border-border pt-6">
+                        <NacaPanel />
+                      </div>
+                    )}
                   </div>
-                ) : mode === 'side' ? (
-                  <div className="flex-1 rounded-lg border border-border overflow-hidden bg-background">
-                    <SideViewCanvas />
-                  </div>
-                ) : (
-                  <div className="flex-1 relative rounded-lg border border-border overflow-hidden bg-background">
-                    <TurbineViewer />
-                    <CanvasHint text="Drag to orbit · Scroll to zoom" />
-                  </div>
-                )}
+                </ScrollArea>
               </div>
-            </Panel>
 
-            <Separator />
+              {/* Collapse button for left sidebar */}
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setLeftOpen(false)}
+                className="hidden md:flex h-12 w-12 p-0 rounded-none border-r border-border hover:bg-primary/10"
+                title="Collapse sidebar"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+            </>
+          )}
 
-            {/* Right sidebar */}
-            <Panel defaultSize={27} minSize={16} maxSize={40} className="bg-card border-l border-border">
-              <ScrollArea className="h-full">
-                <div className="p-4 space-y-6">
-                  <ParameterPanel />
-                  {mode === 'draw' && (
-                    <div className="border-t border-border pt-6">
-                      <BladeSectionEditor />
-                    </div>
-                  )}
-                  {mode === 'view' && (
-                    <div className="border-t border-border pt-6">
-                      <PhysicsDashboard />
-                    </div>
-                  )}
-                </div>
-              </ScrollArea>
-            </Panel>
-          </PanelGroup>
-        </div>
+          {/* Expand button for left sidebar when collapsed */}
+          {!leftOpen && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setLeftOpen(true)}
+              className="hidden md:flex h-12 w-12 p-0 rounded-none border-r border-border hover:bg-primary/10"
+              title="Expand sidebar"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          )}
 
-        {/* Tablet layout - left sidebar + main canvas only */}
-        <div className="hidden md:flex lg:hidden flex-1 overflow-hidden">
-          <PanelGroup>
-            {/* Left sidebar */}
-            <Panel defaultSize={22} minSize={14} maxSize={35} className="bg-card border-r border-border">
-              <ScrollArea className="h-full">
-                <div className="p-4 space-y-6">
-                  <PresetBrowser />
-                  {mode === 'draw' && (
-                    <div className="border-t border-border pt-6">
-                      <NacaPanel />
-                    </div>
-                  )}
-                </div>
-              </ScrollArea>
-            </Panel>
-
-            <Separator />
-
-            {/* Main canvas + right content */}
-            <Panel minSize={40}>
-              <div className="h-full flex flex-col p-4 gap-3">
-                {mode === 'draw' ? (
-                  <div className="flex-1 flex flex-col gap-3 min-h-0">
-                    <div className="flex-1 relative rounded-lg border border-border overflow-hidden bg-background min-h-0">
-                      <KaleidoscopeCanvas />
-                      <PuzzleHUD />
-                      <CanvasHint text="Click to add · Drag to reshape · Ctrl+Z undo" />
-                    </div>
-                    <SectionPanel />
-                  </div>
-                ) : mode === 'side' ? (
-                  <div className="flex-1 rounded-lg border border-border overflow-hidden bg-background">
-                    <SideViewCanvas />
-                  </div>
-                ) : (
-                  <div className="flex-1 relative rounded-lg border border-border overflow-hidden bg-background">
-                    <TurbineViewer />
-                    <CanvasHint text="Drag to orbit · Scroll to zoom" />
-                  </div>
-                )}
-              </div>
-            </Panel>
-          </PanelGroup>
-        </div>
-
-        {/* Mobile layout - canvas only + bottom sheet */}
-        <div className="flex md:hidden flex-1 overflow-hidden relative">
-          <div className="h-full w-full flex flex-col p-3 gap-3">
+          {/* Main Canvas Area */}
+          <div className="flex-1 flex flex-col overflow-hidden p-3 md:p-4 gap-3">
             {mode === 'draw' ? (
               <div className="flex-1 flex flex-col gap-3 min-h-0">
                 <div className="flex-1 relative rounded-lg border border-border overflow-hidden bg-background min-h-0">
@@ -191,12 +124,59 @@ export default function App() {
                 <CanvasHint text="Drag to orbit · Scroll to zoom" />
               </div>
             )}
+
+            {/* Mobile Preset Menu */}
+            <div className="md:hidden">
+              <MobilePresetDrawer />
+            </div>
           </div>
 
-          {/* Mobile preset button */}
-          <div className="absolute top-4 left-4 z-20">
-            <MobilePresetDrawer />
-          </div>
+          {/* Desktop Right Sidebar */}
+          {rightOpen && (
+            <>
+              {/* Collapse button for right sidebar */}
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setRightOpen(false)}
+                className="hidden lg:flex h-12 w-12 p-0 rounded-none border-l border-border hover:bg-primary/10"
+                title="Collapse sidebar"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+
+              <div className="hidden lg:flex lg:flex-col w-72 bg-card border-l border-border">
+                <ScrollArea className="flex-1">
+                  <div className="p-4 space-y-6">
+                    <ParameterPanel />
+                    {mode === 'draw' && (
+                      <div className="border-t border-border pt-6">
+                        <BladeSectionEditor />
+                      </div>
+                    )}
+                    {mode === 'view' && (
+                      <div className="border-t border-border pt-6">
+                        <PhysicsDashboard />
+                      </div>
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+            </>
+          )}
+
+          {/* Expand button for right sidebar when collapsed */}
+          {!rightOpen && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setRightOpen(true)}
+              className="hidden lg:flex h-12 w-12 p-0 rounded-none border-l border-border hover:bg-primary/10"
+              title="Expand sidebar"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+          )}
         </div>
 
         {/* Mobile bottom bar */}
@@ -245,24 +225,41 @@ function SectionPanel() {
 }
 
 function MobilePresetDrawer() {
+  const [open, setOpen] = useState(false)
+
   return (
-    <details className="group">
-      <summary className="bg-card/95 backdrop-blur-md rounded-lg px-3 py-2 border border-border text-xs text-muted-foreground cursor-pointer list-none hover:text-primary transition-colors font-semibold shadow-lg">
-        📋 Presets
-      </summary>
-      <div className="absolute top-12 left-0 bg-card backdrop-blur-xl rounded-lg border border-border shadow-xl w-52 z-50 p-3">
-        <PresetBrowser />
-      </div>
-    </details>
+    <div className="relative">
+      <Button
+        onClick={() => setOpen(!open)}
+        className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-semibold"
+      >
+        📋 {open ? 'Hide' : 'Show'} Presets
+      </Button>
+      {open && (
+        <div className="absolute top-12 left-0 right-0 bg-card border border-border rounded-lg shadow-xl p-4 z-50">
+          <PresetBrowser />
+        </div>
+      )}
+    </div>
   )
 }
 
 function MobileBottomBar() {
+  const [open, setOpen] = useState(false)
+
   return (
-    <div className="lg:hidden border-t border-border bg-card/80 backdrop-blur-md max-h-52 overflow-y-auto">
-      <div className="p-4">
-        <ParameterPanel />
-      </div>
+    <div className="lg:hidden border-t border-border bg-card/80 backdrop-blur-md">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full h-12 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+      >
+        {open ? '▼ Hide' : '▲ Show'} Parameters
+      </button>
+      {open && (
+        <div className="max-h-64 overflow-y-auto border-t border-border p-4">
+          <ParameterPanel />
+        </div>
+      )}
     </div>
   )
 }
