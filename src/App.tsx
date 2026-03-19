@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTurbineStore } from './stores/turbineStore'
 import { usePuzzleStore } from './stores/puzzleStore'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import Header from './components/ui/Header'
 import KaleidoscopeCanvas from './components/canvas/KaleidoscopeCanvas'
 import SideViewCanvas from './components/canvas/SideViewCanvas'
@@ -16,10 +17,13 @@ import BladeSectionEditor from './components/editor/BladeSectionEditor'
 import SectionPreview from './components/editor/SectionPreview'
 import { TooltipProvider } from './components/ui/tooltip'
 import { ScrollArea } from './components/ui/scroll-area'
+import { Button } from './components/ui/button'
 
 export default function App() {
   const { mode, updatePhysics, setTransitioning, setTransitionProgress } = useTurbineStore()
   const { showChallengeList } = usePuzzleStore()
+  const [leftOpen, setLeftOpen] = useState(true)
+  const [rightOpen, setRightOpen] = useState(true)
   const prevModeRef = useRef(mode)
   const transitionTimerRef = useRef<number | null>(null)
 
@@ -31,10 +35,8 @@ export default function App() {
     if (prevModeRef.current === 'draw' && mode === 'view') {
       setTransitioning(true)
       setTransitionProgress(0)
-
       const duration = 1200
       const startTime = performance.now()
-
       const tick = (now: number) => {
         const progress = Math.min(1, (now - startTime) / duration)
         setTransitionProgress(progress)
@@ -47,7 +49,6 @@ export default function App() {
       transitionTimerRef.current = requestAnimationFrame(tick)
     }
     prevModeRef.current = mode
-
     return () => {
       if (transitionTimerRef.current) cancelAnimationFrame(transitionTimerRef.current)
     }
@@ -55,88 +56,147 @@ export default function App() {
 
   return (
     <TooltipProvider>
-      <div className="w-full h-full flex flex-col bg-void">
+      <div className="w-full h-full flex flex-col bg-background text-foreground">
         <Header />
 
-        <div className="flex-1 flex overflow-hidden">
-          {/* Left sidebar */}
-          <aside className="w-48 border-r border-border/40 bg-deep/60 overflow-hidden hidden md:flex md:flex-col">
-            <ScrollArea className="flex-1">
-              <PresetBrowser />
-              {mode === 'draw' && (
-                <div className="border-t border-border/40">
-                  <NacaPanel />
-                </div>
-              )}
-            </ScrollArea>
-          </aside>
+        {/* Main content area */}
+        <div className="flex-1 overflow-hidden flex">
+          {/* Desktop Left Sidebar */}
+          {leftOpen && (
+            <>
+              <div className="hidden md:flex md:flex-col w-64 bg-card border-r border-border">
+                <ScrollArea className="flex-1">
+                  <div className="p-4 space-y-6">
+                    <PresetBrowser />
+                    {mode === 'draw' && (
+                      <div className="border-t border-border pt-6">
+                        <NacaPanel />
+                      </div>
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
 
-          {/* Main canvas */}
-          <main className="flex-1 relative">
+              {/* Collapse button for left sidebar */}
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setLeftOpen(false)}
+                className="hidden md:flex h-12 w-12 p-0 rounded-none border-r border-border hover:bg-primary/10"
+                title="Collapse sidebar"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+            </>
+          )}
+
+          {/* Expand button for left sidebar when collapsed */}
+          {!leftOpen && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setLeftOpen(true)}
+              className="hidden md:flex h-12 w-12 p-0 rounded-none border-r border-border hover:bg-primary/10"
+              title="Expand sidebar"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          )}
+
+          {/* Main Canvas Area */}
+          <div className="flex-1 flex flex-col overflow-hidden p-3 md:p-4 gap-3">
             {mode === 'draw' ? (
-              <div className="absolute inset-0 flex flex-col">
-                <div className="flex-1 relative">
+              <div className="flex-1 flex flex-col gap-3 min-h-0">
+                <div className="flex-1 relative rounded-lg border border-border overflow-hidden bg-background min-h-0">
                   <KaleidoscopeCanvas />
                   <PuzzleHUD />
-                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-none">
-                    <div className="bg-surface/80 backdrop-blur-sm rounded-full px-4 py-1.5 border border-border/40">
-                      <span className="text-[10px] text-text-muted">
-                        Click to add points · Drag to reshape · Draw freehand for smooth curves · Ctrl+Z undo
-                      </span>
-                    </div>
-                  </div>
+                  <CanvasHint text="Click to add · Drag to reshape · Ctrl+Z undo" />
                 </div>
                 <SectionPanel />
               </div>
             ) : mode === 'side' ? (
-              <div className="absolute inset-0">
+              <div className="flex-1 rounded-lg border border-border overflow-hidden bg-background">
                 <SideViewCanvas />
               </div>
             ) : (
-              <div className="absolute inset-0">
+              <div className="flex-1 relative rounded-lg border border-border overflow-hidden bg-background">
                 <TurbineViewer />
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-none">
-                  <div className="bg-surface/80 backdrop-blur-sm rounded-full px-4 py-1.5 border border-border/40">
-                    <span className="text-[10px] text-text-muted">
-                      Drag to orbit · Scroll to zoom · Wind particles show flow direction
-                    </span>
-                  </div>
-                </div>
+                <CanvasHint text="Drag to orbit · Scroll to zoom" />
               </div>
             )}
 
-            {/* Mobile preset toggle */}
-            <div className="absolute top-3 left-3 md:hidden">
+            {/* Mobile Preset Menu */}
+            <div className="md:hidden">
               <MobilePresetDrawer />
             </div>
-          </main>
+          </div>
 
-          {/* Right sidebar */}
-          <aside className="w-56 border-l border-border/40 bg-deep/60 overflow-hidden hidden lg:flex lg:flex-col">
-            <ScrollArea className="flex-1">
-              <ParameterPanel />
-              {mode === 'draw' && (
-                <div className="border-t border-border/40">
-                  <BladeSectionEditor />
-                </div>
-              )}
-              {mode === 'view' && (
-                <div className="border-t border-border/40">
-                  <PhysicsDashboard />
-                </div>
-              )}
-            </ScrollArea>
-          </aside>
+          {/* Desktop Right Sidebar */}
+          {rightOpen && (
+            <>
+              {/* Collapse button for right sidebar */}
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setRightOpen(false)}
+                className="hidden lg:flex h-12 w-12 p-0 rounded-none border-l border-border hover:bg-primary/10"
+                title="Collapse sidebar"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+
+              <div className="hidden lg:flex lg:flex-col w-72 bg-card border-l border-border">
+                <ScrollArea className="flex-1">
+                  <div className="p-4 space-y-6">
+                    <ParameterPanel />
+                    {mode === 'draw' && (
+                      <div className="border-t border-border pt-6">
+                        <BladeSectionEditor />
+                      </div>
+                    )}
+                    {mode === 'view' && (
+                      <div className="border-t border-border pt-6">
+                        <PhysicsDashboard />
+                      </div>
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+            </>
+          )}
+
+          {/* Expand button for right sidebar when collapsed */}
+          {!rightOpen && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setRightOpen(true)}
+              className="hidden lg:flex h-12 w-12 p-0 rounded-none border-l border-border hover:bg-primary/10"
+              title="Expand sidebar"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+          )}
         </div>
 
         {/* Mobile bottom bar */}
         <MobileBottomBar />
 
-        {/* Global overlays */}
+        {/* Overlays */}
         {showChallengeList && <ChallengeList />}
         <Celebration />
       </div>
     </TooltipProvider>
+  )
+}
+
+function CanvasHint({ text }: { text: string }) {
+  return (
+    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-none z-10">
+      <div className="bg-card/90 backdrop-blur-md rounded-full px-4 py-2 border border-border text-[10px] text-muted-foreground shadow-lg">
+        {text}
+      </div>
+    </div>
   )
 }
 
@@ -145,18 +205,18 @@ function SectionPanel() {
 
   return (
     <div
-      className="border-t border-border/40 bg-deep/80 backdrop-blur-sm transition-all"
-      style={{ height: expanded ? 200 : 36 }}
+      className="shrink-0 rounded-lg border border-border bg-card overflow-hidden transition-all duration-300"
+      style={{ height: expanded ? 220 : 44 }}
     >
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full h-9 flex items-center justify-between px-4 text-[10px] uppercase tracking-widest text-text-muted hover:text-teal transition-colors"
+        className="w-full h-11 flex items-center justify-between px-4 text-xs uppercase tracking-widest text-muted-foreground hover:text-primary hover:bg-primary/5 font-semibold transition-colors"
       >
-        <span>2.5D Section View</span>
-        <span className="text-text-dim">{expanded ? '▼' : '▲'}</span>
+        <span>2.5D Section</span>
+        <span>{expanded ? '▼' : '▲'}</span>
       </button>
       {expanded && (
-        <div className="h-[164px]">
+        <div className="h-[176px] border-t border-border p-3">
           <SectionPreview />
         </div>
       )}
@@ -165,24 +225,41 @@ function SectionPanel() {
 }
 
 function MobilePresetDrawer() {
+  const [open, setOpen] = useState(false)
+
   return (
-    <details className="group">
-      <summary className="bg-surface/90 backdrop-blur-sm rounded-lg px-3 py-1.5 border border-border/40 text-xs text-text-dim cursor-pointer list-none">
-        Presets
-      </summary>
-      <div className="absolute top-10 left-0 bg-deep/95 backdrop-blur-md rounded-xl border border-border/40 shadow-2xl w-48 z-50">
-        <PresetBrowser />
-      </div>
-    </details>
+    <div className="relative">
+      <Button
+        onClick={() => setOpen(!open)}
+        className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-semibold"
+      >
+        📋 {open ? 'Hide' : 'Show'} Presets
+      </Button>
+      {open && (
+        <div className="absolute top-12 left-0 right-0 bg-card border border-border rounded-lg shadow-xl p-4 z-50">
+          <PresetBrowser />
+        </div>
+      )}
+    </div>
   )
 }
 
 function MobileBottomBar() {
+  const [open, setOpen] = useState(false)
+
   return (
-    <div className="lg:hidden border-t border-border/40 bg-deep/80 backdrop-blur-sm">
-      <div className="max-h-48 overflow-y-auto">
-        <ParameterPanel />
-      </div>
+    <div className="lg:hidden border-t border-border bg-card/80 backdrop-blur-md">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full h-12 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+      >
+        {open ? '▼ Hide' : '▲ Show'} Parameters
+      </button>
+      {open && (
+        <div className="max-h-64 overflow-y-auto border-t border-border p-4">
+          <ParameterPanel />
+        </div>
+      )}
     </div>
   )
 }

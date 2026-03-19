@@ -1,94 +1,178 @@
 @import "tailwindcss";
 
-/* ── Turbine Designer custom theme tokens ─────────────────────────── */
+/* ─────────────────────────────────────────────────────────────────────────────
+   Tailwind v4 @theme — ALL custom tokens live here.
+   They become utilities automatically:  bg-void, text-teal, border-border, etc.
+   IMPORTANT: Every value must be a direct literal — no circular var() references.
+───────────────────────────────────────────────────────────────────────────── */
 @theme {
-  --color-void: #0a0e1a;
-  --color-deep: #0f1628;
-  --color-surface: #161d33;
+  /* ── Brand palette ────────────────────────────────────────────────── */
+  --color-teal:          #2dd4bf;
+  --color-teal-dim:      #1a8a7a;
+  --color-teal-glow:     #5eead4;
+  --color-bloom-gold:    #fbbf24;
+  --color-bloom-rose:    #f472b6;
+  --color-bloom-violet:  #a78bfa;
+
+  /* ── Dark surface palette ─────────────────────────────────────────── */
+  --color-void:          #0a0e1a;
+  --color-deep:          #0f1628;
+  --color-surface:       #161d33;
   --color-surface-light: #1e2844;
-  --color-border: #2a3555;
-  --color-teal: #2dd4bf;
-  --color-teal-dim: #1a8a7a;
-  --color-teal-glow: #5eead4;
-  --color-bloom-gold: #fbbf24;
-  --color-bloom-rose: #f472b6;
-  --color-bloom-violet: #a78bfa;
-  --color-text: #e2e8f0;
-  --color-text-dim: #94a3b8;
-  --color-text-muted: #64748b;
+  --color-surface-hover: #222e4a;
 
-  /* shadcn semantic aliases mapped to the dark palette */
-  --color-background: var(--color-void);
-  --color-foreground: var(--color-text);
-  --color-card: var(--color-surface);
-  --color-card-foreground: var(--color-text);
-  --color-popover: var(--color-deep);
-  --color-popover-foreground: var(--color-text);
-  --color-primary: var(--color-teal);
-  --color-primary-foreground: var(--color-void);
-  --color-secondary: var(--color-surface-light);
-  --color-secondary-foreground: var(--color-text-dim);
-  --color-muted: var(--color-surface);
-  --color-muted-foreground: var(--color-text-muted);
-  --color-accent: var(--color-teal-dim);
-  --color-accent-foreground: var(--color-teal-glow);
-  --color-destructive: #ef4444;
+  /* ── Dark text palette ────────────────────────────────────────────── */
+  --color-text:          #e2e8f0;
+  --color-text-dim:      #94a3b8;
+  --color-text-muted:    #64748b;
+
+  /* ── Semantic tokens — DARK (default) ────────────────────────────── */
+  --color-background:          #0a0e1a;
+  --color-foreground:          #e2e8f0;
+  --color-card:                #161d33;
+  --color-card-foreground:     #e2e8f0;
+  --color-popover:             #0f1628;
+  --color-popover-foreground:  #e2e8f0;
+  --color-primary:             #2dd4bf;
+  --color-primary-foreground:  #0a0e1a;
+  --color-secondary:           #1e2844;
+  --color-secondary-foreground:#94a3b8;
+  --color-muted:               #161d33;
+  --color-muted-foreground:    #64748b;
+  --color-accent:              #1a8a7a;
+  --color-accent-foreground:   #5eead4;
+  --color-destructive:         #ef4444;
   --color-destructive-foreground: #fef2f2;
-  --color-border: var(--color-border);
-  --color-input: var(--color-surface-light);
-  --color-ring: var(--color-teal-dim);
+  --color-border:              #2a3555;
+  --color-input:               #1e2844;
+  --color-ring:                #1a8a7a;
 
+  /* ── Border radius ────────────────────────────────────────────────── */
   --radius: 0.5rem;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
 }
 
-/* ── shadcn CSS variable layer (required for component internals) ──── */
+/* ─────────────────────────────────────────────────────────────────────────────
+   Light mode — override semantic tokens only.
+   Applied when <html class="light"> is set.
+───────────────────────────────────────────────────────────────────────────── */
+.light {
+  --color-background:          #f8fafc;
+  --color-foreground:          #0f172a;
+  --color-card:                #ffffff;
+  --color-card-foreground:     #0f172a;
+  --color-popover:             #ffffff;
+  --color-popover-foreground:  #0f172a;
+  --color-primary:             #0d9488;
+  --color-primary-foreground:  #ffffff;
+  --color-secondary:           #f1f5f9;
+  --color-secondary-foreground:#475569;
+  --color-muted:               #f1f5f9;
+  --color-muted-foreground:    #94a3b8;
+  --color-accent:              #ccfbf1;
+  --color-accent-foreground:   #0d9488;
+  --color-destructive:         #dc2626;
+  --color-destructive-foreground: #ffffff;
+  --color-border:              #e2e8f0;
+  --color-input:               #e2e8f0;
+  --color-ring:                #0d9488;
+  --color-surface:             #ffffff;
+  --color-surface-light:       #f1f5f9;
+  --color-surface-hover:       #e2e8f0;
+  --color-deep:                #f8fafc;
+  --color-void:                #f1f5f9;
+  --color-text:                #0f172a;
+  --color-text-dim:            #475569;
+  --color-text-muted:          #94a3b8;
+  --color-teal:                #0d9488;
+  --color-teal-dim:            #0f766e;
+  --color-teal-glow:           #2dd4bf;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   shadcn-ui compatibility layer.
+   shadcn ships components that reference  hsl(var(--background)) etc.
+   We re-map those CSS vars to our @theme values here.
+───────────────────────────────────────────────────────────────────────────── */
 @layer base {
   :root {
-    --background: 222 47% 7%;
-    --foreground: 213 31% 91%;
-    --card: 222 44% 14%;
-    --card-foreground: 213 31% 91%;
-    --popover: 222 47% 10%;
-    --popover-foreground: 213 31% 91%;
-    --primary: 174 72% 50%;
-    --primary-foreground: 222 47% 7%;
-    --secondary: 217 33% 19%;
-    --secondary-foreground: 215 20% 65%;
-    --muted: 222 44% 14%;
-    --muted-foreground: 215 16% 47%;
-    --accent: 173 58% 31%;
-    --accent-foreground: 166 76% 60%;
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 86% 97%;
-    --border: 220 32% 25%;
-    --input: 217 33% 19%;
-    --ring: 173 58% 31%;
-    --radius: 0.5rem;
+    --background:          var(--color-background);
+    --foreground:          var(--color-foreground);
+    --card:                var(--color-card);
+    --card-foreground:     var(--color-card-foreground);
+    --popover:             var(--color-popover);
+    --popover-foreground:  var(--color-popover-foreground);
+    --primary:             var(--color-primary);
+    --primary-foreground:  var(--color-primary-foreground);
+    --secondary:           var(--color-secondary);
+    --secondary-foreground:var(--color-secondary-foreground);
+    --muted:               var(--color-muted);
+    --muted-foreground:    var(--color-muted-foreground);
+    --accent:              var(--color-accent);
+    --accent-foreground:   var(--color-accent-foreground);
+    --destructive:         var(--color-destructive);
+    --destructive-foreground: var(--color-destructive-foreground);
+    --border:              var(--color-border);
+    --input:               var(--color-input);
+    --ring:                var(--color-ring);
+    --radius:              0.5rem;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body, #root {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    font-family: system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 2px;
   }
 }
 
-/* ── Global reset ─────────────────────────────────────────────────── */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/* ─────────────────────────────────────────────────────────────────────────────
+   Resize handle styling for react-resizable-panels
+───────────────────────────────────────────────────────────────────────────── */
+[data-panel-resize-handle-enabled] {
+  position: relative;
+  outline: none;
 }
 
-html, body, #root {
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  background: #0a0e1a;
-  color: #e2e8f0;
-  font-family: system-ui, -apple-system, sans-serif;
-  -webkit-font-smoothing: antialiased;
+[data-panel-resize-handle-enabled]:hover::after,
+[data-panel-resize-handle-enabled][data-resize-handle-state="drag"]::after {
+  background-color: var(--color-teal);
+  opacity: 0.6;
 }
 
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #2a3555; border-radius: 2px; }
+[data-panel-resize-handle-enabled]::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background-color: var(--color-border);
+  opacity: 0.4;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+}
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   Animations
+───────────────────────────────────────────────────────────────────────────── */
 @keyframes pulse-soft {
   0%, 100% { opacity: 0.6; }
-  50% { opacity: 1; }
+  50%       { opacity: 1;   }
 }

@@ -28,10 +28,10 @@ function ParamSlider({
   unit?: string
 }) {
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-2">
       <div className="flex justify-between items-center">
-        <Label className="text-[11px] uppercase tracking-wider text-text-dim">{label}</Label>
-        <span className="text-[11px] font-mono text-teal">
+        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">{label}</Label>
+        <span className="text-[10px] font-mono text-teal font-bold">
           {value.toFixed(step < 1 ? (step < 0.1 ? 2 : 1) : 0)}{unit}
         </span>
       </div>
@@ -41,7 +41,7 @@ function ParamSlider({
         step={step}
         value={[value]}
         onValueChange={([v]) => onChange(v)}
-        className="[&_[data-radix-slider-thumb]]:bg-teal [&_[data-radix-slider-thumb]]:border-teal/50 [&_[data-radix-slider-range]]:bg-teal"
+        className="[&_[data-radix-slider-thumb]]:bg-teal [&_[data-radix-slider-thumb]]:border-teal/50 [&_[data-radix-slider-range]]:bg-teal/60"
       />
     </div>
   )
@@ -120,45 +120,51 @@ export default function ParameterPanel() {
   const tier = TIER_CONFIG[bloomTier]
 
   return (
-    <div className="flex flex-col gap-3 p-4 h-full overflow-y-auto">
+    <div className="flex flex-col gap-4 h-full overflow-y-auto">
 
       {/* ── Bloom Status Card ──────────────────────────────────────────── */}
       <div
-        className="rounded-xl p-3 border"
+        className="rounded-xl p-4 border backdrop-blur-sm sticky top-0"
         style={{
           borderColor: tier.color + '40',
-          background: `linear-gradient(135deg, ${tier.color}08, ${tier.color}04)`,
+          background: `linear-gradient(135deg, ${tier.color}12, ${tier.color}06)`,
         }}
       >
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-lg" style={{ color: tier.color }}>{tier.icon}</span>
-          <span className="text-sm font-medium" style={{ color: tier.color }}>{tier.label}</span>
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-xl" style={{ color: tier.color }}>{tier.icon}</span>
+          <span className="text-sm font-bold" style={{ color: tier.color }}>{tier.label}</span>
           <Badge
             variant="outline"
-            className="ml-auto text-[9px] h-4 px-1.5"
-            style={{ borderColor: tier.color + '40', color: tier.color }}
+            className="ml-auto text-[9px] h-5 px-2 font-semibold"
+            style={{ borderColor: tier.color + '50', color: tier.color }}
           >
             {bloomTier}
           </Badge>
         </div>
-        <div className="flex justify-between text-[10px] text-text-muted">
-          <span>Cp: <span className="text-text-dim font-mono">{estimatedCp.toFixed(3)}</span></span>
-          <span>Power: <span className="text-text-dim font-mono">{powerOutput.toFixed(1)} W</span></span>
+        <div className="flex justify-between text-[11px] text-muted-foreground gap-3">
+          <div className="flex flex-col">
+            <span className="text-muted-foreground/60 text-[9px]">Efficiency</span>
+            <span className="text-teal font-mono font-bold">{estimatedCp.toFixed(3)}</span>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-muted-foreground/60 text-[9px]">Power Output</span>
+            <span className="text-teal font-mono font-bold">{powerOutput.toFixed(1)} W</span>
+          </div>
         </div>
       </div>
 
       {/* ── Blade Count ───────────────────────────────────────────────── */}
       <div>
-        <Label className="text-[11px] uppercase tracking-wider text-text-dim block mb-2">Blades</Label>
-        <div className="flex gap-1">
+        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-2.5 font-semibold">Blade Count</Label>
+        <div className="flex gap-2">
           {[2, 3, 4, 5, 6, 8].map((n) => (
             <button
               key={n}
               onClick={() => setBladeCount(n)}
-              className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-all ${
+              className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all border ${
                 bladeCount === n
-                  ? 'bg-teal/20 text-teal border border-teal/30'
-                  : 'bg-surface text-text-dim border border-border hover:border-teal/20'
+                  ? 'bg-teal/30 text-teal border-teal/40 shadow-sm'
+                  : 'bg-secondary/50 text-muted-foreground hover:bg-secondary hover:border-teal/30'
               }`}
             >
               {n}
@@ -169,17 +175,17 @@ export default function ParameterPanel() {
 
       {/* ── Symmetry Mode ─────────────────────────────────────────────── */}
       <div>
-        <Label className="text-[11px] uppercase tracking-wider text-text-dim block mb-2">Symmetry</Label>
-        <div className="flex gap-1">
+        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-2.5 font-semibold">Symmetry Mode</Label>
+        <div className="flex gap-2">
           {SYMMETRY_OPTIONS.map((opt) => (
             <button
               key={opt.value}
               onClick={() => setSymmetryMode(opt.value)}
               title={opt.desc}
-              className={`flex-1 py-1.5 rounded-lg text-[10px] font-medium transition-all ${
+              className={`flex-1 py-2 rounded-lg text-[10px] font-semibold transition-all border ${
                 symmetryMode === opt.value
-                  ? 'bg-bloom-violet/20 text-bloom-violet border border-bloom-violet/30'
-                  : 'bg-surface text-text-dim border border-border hover:border-bloom-violet/20'
+                  ? 'bg-bloom-violet/30 text-bloom-violet border-bloom-violet/40 shadow-sm'
+                  : 'bg-secondary/50 text-muted-foreground hover:bg-secondary hover:border-bloom-violet/30'
               }`}
             >
               {opt.label}
@@ -191,32 +197,34 @@ export default function ParameterPanel() {
       {/* ── Draw-mode controls ────────────────────────────────────────── */}
       {mode === 'draw' && (
         <>
-          <ParamSlider
-            label="Curve Detail"
-            value={curveSmoothing}
-            min={2} max={20} step={1}
-            onChange={setCurveSmoothing}
-          />
+          <div className="pt-2">
+            <ParamSlider
+              label="Curve Detail"
+              value={curveSmoothing}
+              min={2} max={20} step={1}
+              onChange={setCurveSmoothing}
+            />
+          </div>
 
-          <Separator className="bg-border/50" />
+          <Separator className="bg-border/20 my-2" />
 
           {/* Parametric profile toggle */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <Label className="text-[10px] uppercase tracking-widest text-text-muted">Profile Shape</Label>
-              <div className="flex items-center bg-surface rounded-lg border border-border/50 p-0.5">
+          <div className="pt-2">
+            <div className="flex items-center justify-between mb-3">
+              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Profile Shape</Label>
+              <div className="flex items-center bg-secondary/60 rounded-lg border border-teal/20 p-1 gap-1">
                 <button
                   onClick={() => setParametricMode(false)}
-                  className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all ${
-                    !parametricMode ? 'bg-teal/20 text-teal' : 'text-text-muted hover:text-text'
+                  className={`px-2.5 py-1 rounded text-[9px] font-semibold transition-all ${
+                    !parametricMode ? 'bg-teal/30 text-teal' : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   Draw
                 </button>
                 <button
                   onClick={() => { setParametricMode(true); useTurbineStore.getState().applyParametric() }}
-                  className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all ${
-                    parametricMode ? 'bg-teal/20 text-teal' : 'text-text-muted hover:text-text'
+                  className={`px-2.5 py-1 rounded text-[9px] font-semibold transition-all ${
+                    parametricMode ? 'bg-teal/30 text-teal' : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   Parametric
@@ -238,7 +246,7 @@ export default function ParameterPanel() {
                   variant="outline"
                   size="sm"
                   onClick={() => setParametricMode(false)}
-                  className="mt-1 h-7 text-[10px] border-border/50 bg-surface text-text-dim hover:border-teal/30 hover:text-teal"
+                  className="mt-1 h-7 text-[10px] border-border bg-secondary text-secondary-foreground hover:border-teal/30 hover:text-teal"
                 >
                   Convert to Points
                 </Button>
@@ -249,13 +257,15 @@ export default function ParameterPanel() {
       )}
 
       {/* ── Wind ──────────────────────────────────────────────────────── */}
-      <ParamSlider label="Wind Speed" value={windSpeed} min={0} max={25} step={0.5} onChange={setWindSpeed} unit=" m/s" />
+      <div className="pt-2">
+        <ParamSlider label="Wind Speed" value={windSpeed} min={0} max={25} step={0.5} onChange={setWindSpeed} unit=" m/s" />
+      </div>
 
       {/* ── Extrusion ─────────────────────────────────────────────────── */}
-      <Separator className="bg-border/50" />
-      <div>
-        <Label className="text-[10px] uppercase tracking-widest text-text-muted mb-2 block">Extrusion</Label>
-        <div className="flex flex-col gap-2.5">
+      <Separator className="bg-border/20 my-3" />
+      <div className="pt-2">
+        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground mb-3 block font-semibold">Extrusion</Label>
+        <div className="flex flex-col gap-3">
           <ParamSlider label="Height" value={height} min={0.5} max={3} step={0.1} onChange={setHeight} unit="m" />
           <ParamSlider label="Thickness" value={thickness} min={0.02} max={0.2} step={0.01} onChange={setThickness} />
           <DistributionEditor
@@ -278,20 +288,20 @@ export default function ParameterPanel() {
       {/* ── Material (view mode only) ─────────────────────────────────── */}
       {mode === 'view' && (
         <>
-          <Separator className="bg-border/50" />
-          <div>
-            <Label className="text-[10px] uppercase tracking-widest text-text-muted mb-2 block">Material</Label>
-            <div className="grid grid-cols-2 gap-1">
+          <Separator className="bg-border/20 my-3" />
+          <div className="pt-2">
+            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground mb-3 block font-semibold">Material</Label>
+            <div className="grid grid-cols-2 gap-2">
               {MATERIAL_KEYS.map((key) => {
                 const mat = MATERIAL_PRESETS[key]
                 return (
                   <button
                     key={key}
                     onClick={() => setMaterialPreset(key)}
-                    className={`py-1.5 px-2 rounded-lg text-[10px] font-medium transition-all flex items-center gap-1.5 ${
+                    className={`py-2 px-2.5 rounded-lg text-[10px] font-semibold transition-all flex items-center gap-2 border ${
                       materialPreset === key
-                        ? 'bg-teal/15 text-teal border border-teal/30'
-                        : 'bg-surface text-text-dim border border-border hover:border-teal/20'
+                        ? 'bg-teal/30 text-teal border-teal/40 shadow-sm'
+                        : 'bg-secondary/50 text-muted-foreground hover:bg-secondary hover:border-teal/30'
                     }`}
                   >
                     <span
@@ -308,25 +318,27 @@ export default function ParameterPanel() {
       )}
 
       {/* ── Spin toggle ───────────────────────────────────────────────── */}
-      <Button
-        variant={isSpinning ? 'default' : 'outline'}
-        size="sm"
-        onClick={() => setIsSpinning(!isSpinning)}
-        className={`mt-1 h-8 text-xs ${
-          isSpinning
-            ? 'bg-teal/15 text-teal border border-teal/30 hover:bg-teal/25'
-            : 'bg-surface text-text-dim border-border hover:border-teal/20'
-        }`}
-      >
-        {isSpinning ? '⟳ Spinning' : '⏸ Paused'}
-      </Button>
+      <div className="pt-3">
+        <Button
+          variant={isSpinning ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setIsSpinning(!isSpinning)}
+          className={`w-full h-9 text-xs font-semibold border ${
+            isSpinning
+              ? 'bg-teal/30 text-teal border-teal/40 shadow-md hover:bg-teal/35'
+              : 'bg-secondary/50 text-muted-foreground border-border hover:bg-secondary hover:border-teal/30 hover:text-teal'
+          }`}
+        >
+          {isSpinning ? '⟳ Spinning' : '⏸ Paused'}
+        </Button>
+      </div>
 
       {/* ── Export (view mode only) ───────────────────────────────────── */}
       {mode === 'view' && (
         <>
-          <Separator className="bg-border/50" />
-          <div>
-            <Label className="text-[10px] uppercase tracking-widest text-text-muted mb-2 block">Export</Label>
+          <Separator className="bg-border/20 my-3" />
+          <div className="pt-2 pb-4">
+            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground mb-3 block font-semibold">Export</Label>
             <div className="flex gap-2">
               <Button
                 variant="outline"
@@ -336,7 +348,7 @@ export default function ParameterPanel() {
                   try { await handleExportGLB() } finally { setExportingGLB(false) }
                 }}
                 disabled={exportingGLB}
-                className="flex-1 h-8 text-xs border-border/50 bg-surface text-text-dim hover:border-teal/30 hover:text-teal"
+                className="flex-1 h-9 text-xs border border-teal/20 bg-secondary/50 text-muted-foreground hover:bg-secondary hover:border-teal/40 hover:text-teal font-semibold"
               >
                 {exportingGLB ? '…' : '↓ GLB'}
               </Button>
@@ -344,7 +356,7 @@ export default function ParameterPanel() {
                 variant="outline"
                 size="sm"
                 onClick={handleExportPNG}
-                className="flex-1 h-8 text-xs border-border/50 bg-surface text-text-dim hover:border-teal/30 hover:text-teal"
+                className="flex-1 h-9 text-xs border border-teal/20 bg-secondary/50 text-muted-foreground hover:bg-secondary hover:border-teal/40 hover:text-teal font-semibold"
               >
                 ↓ PNG
               </Button>

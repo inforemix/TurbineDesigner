@@ -74,57 +74,57 @@ export default function NacaPanel() {
   }, [bladeCount])
 
   return (
-    <div className="p-3 flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <Label className="text-[10px] uppercase tracking-widest text-text-muted">Airfoil</Label>
-        <Badge variant="outline" className="text-[9px] text-text-muted border-border/50">
+        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Airfoil Profile</Label>
+        <Badge variant="outline" className="text-[9px] text-muted-foreground border-border/30 bg-secondary/30">
           σ≈{solidity}
         </Badge>
       </div>
 
       {/* Profile preview */}
-      <div className="rounded-lg bg-surface border border-border/40 p-2">
+      <div className="rounded-lg bg-secondary/40 border border-teal/20 p-3">
         <AirfoilPreview code={selected} />
-        <div className="text-center text-[10px] text-teal font-mono mt-1">NACA {selected}</div>
+        <div className="text-center text-[10px] text-teal font-mono mt-2 font-bold">NACA {selected}</div>
       </div>
 
       {/* Preset list */}
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-2">
         {AIRFOIL_PRESETS.map((preset) => (
           <button
             key={preset.code}
             onClick={() => setSelected(preset.code)}
-            className={`text-left px-2.5 py-1.5 rounded-lg text-[10px] transition-all flex items-center justify-between ${
+            className={`text-left px-3 py-2 rounded-lg text-[10px] font-semibold transition-all flex items-center justify-between border ${
               selected === preset.code
-                ? 'bg-teal/15 text-teal border border-teal/30'
-                : 'bg-surface text-text-dim border border-border hover:border-teal/20'
+                ? 'bg-teal/30 text-teal border-teal/40 shadow-sm'
+                : 'bg-secondary/50 text-muted-foreground hover:bg-secondary hover:border-teal/30 hover:text-teal'
             }`}
           >
             <span>{preset.label}</span>
-            <span className="font-mono text-[9px] opacity-60">{preset.code}</span>
+            <span className="font-mono text-[9px] opacity-70">{preset.code}</span>
           </button>
         ))}
       </div>
 
-      <Separator className="bg-border/40" />
+      <Separator className="bg-border/20 my-2" />
 
       {/* Custom NACA input */}
       <div>
-        <Label className="text-[10px] uppercase tracking-widest text-text-muted block mb-1.5">Custom</Label>
+        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-2.5 font-semibold">Custom Code</Label>
         {editingCustom ? (
-          <div className="flex gap-1">
+          <div className="flex gap-2">
             <input
               type="text"
               value={customCode}
               maxLength={4}
               onChange={(e) => setCustomCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
-              className="flex-1 bg-surface border border-teal/40 rounded-lg px-2 py-1 text-xs font-mono text-teal text-center focus:outline-none focus:ring-1 focus:ring-teal/50"
+              className="flex-1 bg-secondary/60 border border-teal/30 rounded-lg px-2 py-2 text-xs font-mono text-teal text-center focus:outline-none focus:ring-1 focus:ring-teal/50 focus:border-teal/50"
               placeholder="4412"
             />
             <Button
               size="sm"
               onClick={() => { setSelected(customCode.padStart(4, '0')); setEditingCustom(false) }}
-              className="h-7 px-2 text-[10px] bg-teal/20 text-teal border border-teal/30 hover:bg-teal/30"
+              className="h-9 px-3 text-[10px] bg-teal/30 text-teal border border-teal/40 hover:bg-teal/40 font-semibold"
             >
               ✓
             </Button>
@@ -134,7 +134,7 @@ export default function NacaPanel() {
             variant="outline"
             size="sm"
             onClick={() => setEditingCustom(true)}
-            className="w-full h-7 text-[10px] border-border/50 bg-surface text-text-dim hover:border-teal/30 hover:text-teal"
+            className="w-full h-9 text-[10px] border border-teal/20 bg-secondary/50 text-muted-foreground hover:border-teal/40 hover:text-teal hover:bg-secondary font-semibold"
           >
             + Enter NACA code
           </Button>

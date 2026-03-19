@@ -82,11 +82,11 @@ function MetricRow({
   color?: string
 }) {
   return (
-    <div className="flex items-center justify-between py-0.5">
-      <Label className="text-[10px] text-text-muted">{label}</Label>
-      <span className="text-[11px] font-mono" style={{ color }}>
+    <div className="flex items-center justify-between py-1.5">
+      <Label className="text-[10px] text-muted-foreground font-medium">{label}</Label>
+      <span className="text-[11px] font-mono font-bold" style={{ color }}>
         {value}
-        {unit && <span className="text-text-dim text-[9px] ml-0.5">{unit}</span>}
+        {unit && <span className="text-secondary-foreground text-[9px] ml-1">{unit}</span>}
       </span>
     </div>
   )
@@ -129,33 +129,33 @@ export default function PhysicsDashboard() {
   }, [result])
 
   return (
-    <div className="p-3 flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <Label className="text-[10px] uppercase tracking-widest text-text-muted">DMST Physics</Label>
+        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Physics Dashboard</Label>
         <Badge
           variant="outline"
-          className="text-[9px] border-teal/30 text-teal"
+          className="text-[9px] border-teal/30 text-teal bg-teal/10 font-semibold"
         >
-          live
+          ● live
         </Badge>
       </div>
 
       {/* Power Curve Sparkline */}
-      <Card className="bg-surface/60 border-border/40">
-        <CardHeader className="p-2 pb-1">
-          <CardTitle className="text-[10px] text-text-muted flex justify-between">
-            <span>Cp vs TSR</span>
+      <Card className="bg-secondary/40 border-teal/20">
+        <CardHeader className="p-3 pb-2">
+          <CardTitle className="text-[10px] text-muted-foreground flex justify-between font-semibold">
+            <span>Cp vs TSR Curve</span>
             <span className="text-teal font-mono">Cp<sub>max</sub>={peakCp.toFixed(3)}</span>
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-2 pt-0">
+        <CardContent className="p-3 pt-2">
           <Sparkline
             data={powerCurve.map((d) => ({ x: d.tsr, y: d.cp }))}
             height={44}
             color="#2dd4bf"
             peakX={peakTSR}
           />
-          <div className="flex justify-between text-[9px] text-text-dim mt-0.5">
+          <div className="flex justify-between text-[9px] text-secondary-foreground mt-2">
             <span>TSR 0</span>
             <span>optimal λ={peakTSR.toFixed(1)}</span>
             <span>7</span>
@@ -164,7 +164,8 @@ export default function PhysicsDashboard() {
       </Card>
 
       {/* Key metrics */}
-      <div className="flex flex-col gap-0">
+      <div className="flex flex-col gap-1 bg-secondary/20 rounded-lg p-3 border border-border/20">
+        <div className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Key Metrics</div>
         <MetricRow label="Power coeff. Cp" value={result.cp.toFixed(3)} color="#2dd4bf" />
         <MetricRow label="Torque coeff. Cq" value={result.cq.toFixed(4)} color="#94a3b8" />
         <MetricRow label="Shaft power" value={result.power.toFixed(1)} unit="W" color="#fbbf24" />
@@ -173,10 +174,11 @@ export default function PhysicsDashboard() {
         <MetricRow label="RPM" value={((result.omega * 60) / (2 * Math.PI)).toFixed(1)} color="#a78bfa" />
       </div>
 
-      <Separator className="bg-border/40" />
+      <Separator className="bg-border/20" />
 
       {/* Secondary metrics */}
-      <div className="flex flex-col gap-0">
+      <div className="flex flex-col gap-1 bg-secondary/20 rounded-lg p-3 border border-border/20">
+        <div className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Configuration</div>
         <MetricRow label="Wind speed" value={windSpeed.toFixed(1)} unit="m/s" />
         <MetricRow label="Swept area" value={(2 * radius * height).toFixed(2)} unit="m²" />
         <MetricRow label="Solidity σ" value={((bladeCount * chord) / (2 * radius)).toFixed(3)} />
@@ -184,18 +186,18 @@ export default function PhysicsDashboard() {
       </div>
 
       {/* Betz limit indicator */}
-      <div>
-        <div className="flex justify-between text-[9px] text-text-dim mb-1">
-          <span>Betz efficiency</span>
-          <span className="text-teal">{((result.cp / 0.593) * 100).toFixed(0)}%</span>
+      <div className="bg-secondary/20 rounded-lg p-3 border border-teal/20">
+        <div className="flex justify-between text-[10px] text-muted-foreground mb-2 font-semibold">
+          <span>Betz Efficiency</span>
+          <span className="text-teal font-mono">{((result.cp / 0.593) * 100).toFixed(0)}%</span>
         </div>
-        <div className="h-1.5 bg-surface rounded-full overflow-hidden">
+        <div className="h-2 bg-secondary rounded-full overflow-hidden border border-border/20">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-teal to-bloom-gold transition-all duration-500"
+            className="h-full rounded-full bg-gradient-to-r from-teal via-teal-glow to-bloom-gold transition-all duration-500 shadow-lg"
             style={{ width: `${Math.min((result.cp / 0.593) * 100, 100)}%` }}
           />
         </div>
-        <div className="text-[9px] text-text-dim mt-0.5 text-right">Betz limit: 0.593</div>
+        <div className="text-[9px] text-muted-foreground mt-2 text-right font-mono">Betz limit: 59.3%</div>
       </div>
     </div>
   )
