@@ -7,11 +7,15 @@ import SideViewCanvas from './components/canvas/SideViewCanvas'
 import TurbineViewer from './components/viewer/TurbineViewer'
 import ParameterPanel from './components/ui/ParameterPanel'
 import PresetBrowser from './components/ui/PresetBrowser'
+import NacaPanel from './components/ui/NacaPanel'
+import PhysicsDashboard from './components/ui/PhysicsDashboard'
 import PuzzleHUD from './components/puzzle/PuzzleHUD'
 import ChallengeList from './components/puzzle/ChallengeList'
 import Celebration from './components/puzzle/Celebration'
 import BladeSectionEditor from './components/editor/BladeSectionEditor'
 import SectionPreview from './components/editor/SectionPreview'
+import { TooltipProvider } from './components/ui/tooltip'
+import { ScrollArea } from './components/ui/scroll-area'
 
 export default function App() {
   const { mode, updatePhysics, setTransitioning, setTransitionProgress } = useTurbineStore()
@@ -50,78 +54,89 @@ export default function App() {
   }, [mode, setTransitioning, setTransitionProgress])
 
   return (
-    <div className="w-full h-full flex flex-col bg-void">
-      <Header />
+    <TooltipProvider>
+      <div className="w-full h-full flex flex-col bg-void">
+        <Header />
 
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left sidebar - Presets */}
-        <aside className="w-48 border-r border-border/40 bg-deep/60 overflow-y-auto hidden md:block">
-          <PresetBrowser />
-        </aside>
+        <div className="flex-1 flex overflow-hidden">
+          {/* Left sidebar */}
+          <aside className="w-48 border-r border-border/40 bg-deep/60 overflow-hidden hidden md:flex md:flex-col">
+            <ScrollArea className="flex-1">
+              <PresetBrowser />
+              {mode === 'draw' && (
+                <div className="border-t border-border/40">
+                  <NacaPanel />
+                </div>
+              )}
+            </ScrollArea>
+          </aside>
 
-        {/* Main canvas area */}
-        <main className="flex-1 relative">
-          {mode === 'draw' ? (
-            <div className="absolute inset-0 flex flex-col">
-              {/* Drawing canvas */}
-              <div className="flex-1 relative">
-                <KaleidoscopeCanvas />
-                {/* Puzzle HUD overlay */}
-                <PuzzleHUD />
-                {/* Drawing hints overlay */}
+          {/* Main canvas */}
+          <main className="flex-1 relative">
+            {mode === 'draw' ? (
+              <div className="absolute inset-0 flex flex-col">
+                <div className="flex-1 relative">
+                  <KaleidoscopeCanvas />
+                  <PuzzleHUD />
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-none">
+                    <div className="bg-surface/80 backdrop-blur-sm rounded-full px-4 py-1.5 border border-border/40">
+                      <span className="text-[10px] text-text-muted">
+                        Click to add points · Drag to reshape · Draw freehand for smooth curves · Ctrl+Z undo
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <SectionPanel />
+              </div>
+            ) : mode === 'side' ? (
+              <div className="absolute inset-0">
+                <SideViewCanvas />
+              </div>
+            ) : (
+              <div className="absolute inset-0">
+                <TurbineViewer />
                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-none">
                   <div className="bg-surface/80 backdrop-blur-sm rounded-full px-4 py-1.5 border border-border/40">
                     <span className="text-[10px] text-text-muted">
-                      Click to add points · Drag to reshape · Draw freehand for smooth curves · Ctrl+Z undo
+                      Drag to orbit · Scroll to zoom · Wind particles show flow direction
                     </span>
                   </div>
                 </div>
               </div>
+            )}
 
-              {/* 2.5D Section Preview (collapsible) */}
-              <SectionPanel />
+            {/* Mobile preset toggle */}
+            <div className="absolute top-3 left-3 md:hidden">
+              <MobilePresetDrawer />
             </div>
-          ) : mode === 'side' ? (
-            <div className="absolute inset-0">
-              <SideViewCanvas />
-            </div>
-          ) : (
-            <div className="absolute inset-0">
-              <TurbineViewer />
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-none">
-                <div className="bg-surface/80 backdrop-blur-sm rounded-full px-4 py-1.5 border border-border/40">
-                  <span className="text-[10px] text-text-muted">
-                    Drag to orbit · Scroll to zoom · Wind particles show flow direction
-                  </span>
+          </main>
+
+          {/* Right sidebar */}
+          <aside className="w-56 border-l border-border/40 bg-deep/60 overflow-hidden hidden lg:flex lg:flex-col">
+            <ScrollArea className="flex-1">
+              <ParameterPanel />
+              {mode === 'draw' && (
+                <div className="border-t border-border/40">
+                  <BladeSectionEditor />
                 </div>
-              </div>
-            </div>
-          )}
+              )}
+              {mode === 'view' && (
+                <div className="border-t border-border/40">
+                  <PhysicsDashboard />
+                </div>
+              )}
+            </ScrollArea>
+          </aside>
+        </div>
 
-          {/* Mobile preset toggle */}
-          <div className="absolute top-3 left-3 md:hidden">
-            <MobilePresetDrawer />
-          </div>
-        </main>
+        {/* Mobile bottom bar */}
+        <MobileBottomBar />
 
-        {/* Right sidebar - Parameters + Section Editor */}
-        <aside className="w-56 border-l border-border/40 bg-deep/60 overflow-y-auto hidden lg:block">
-          <ParameterPanel />
-          {mode === 'draw' && (
-            <div className="border-t border-border/40">
-              <BladeSectionEditor />
-            </div>
-          )}
-        </aside>
+        {/* Global overlays */}
+        {showChallengeList && <ChallengeList />}
+        <Celebration />
       </div>
-
-      {/* Mobile bottom bar */}
-      <MobileBottomBar />
-
-      {/* Global overlays */}
-      {showChallengeList && <ChallengeList />}
-      <Celebration />
-    </div>
+    </TooltipProvider>
   )
 }
 

@@ -1,5 +1,6 @@
 @import "tailwindcss";
 
+/* ── Turbine Designer custom theme tokens ─────────────────────────── */
 @theme {
   --color-void: #0a0e1a;
   --color-deep: #0f1628;
@@ -15,8 +16,58 @@
   --color-text: #e2e8f0;
   --color-text-dim: #94a3b8;
   --color-text-muted: #64748b;
+
+  /* shadcn semantic aliases mapped to the dark palette */
+  --color-background: var(--color-void);
+  --color-foreground: var(--color-text);
+  --color-card: var(--color-surface);
+  --color-card-foreground: var(--color-text);
+  --color-popover: var(--color-deep);
+  --color-popover-foreground: var(--color-text);
+  --color-primary: var(--color-teal);
+  --color-primary-foreground: var(--color-void);
+  --color-secondary: var(--color-surface-light);
+  --color-secondary-foreground: var(--color-text-dim);
+  --color-muted: var(--color-surface);
+  --color-muted-foreground: var(--color-text-muted);
+  --color-accent: var(--color-teal-dim);
+  --color-accent-foreground: var(--color-teal-glow);
+  --color-destructive: #ef4444;
+  --color-destructive-foreground: #fef2f2;
+  --color-border: var(--color-border);
+  --color-input: var(--color-surface-light);
+  --color-ring: var(--color-teal-dim);
+
+  --radius: 0.5rem;
 }
 
+/* ── shadcn CSS variable layer (required for component internals) ──── */
+@layer base {
+  :root {
+    --background: 222 47% 7%;
+    --foreground: 213 31% 91%;
+    --card: 222 44% 14%;
+    --card-foreground: 213 31% 91%;
+    --popover: 222 47% 10%;
+    --popover-foreground: 213 31% 91%;
+    --primary: 174 72% 50%;
+    --primary-foreground: 222 47% 7%;
+    --secondary: 217 33% 19%;
+    --secondary-foreground: 215 20% 65%;
+    --muted: 222 44% 14%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 173 58% 31%;
+    --accent-foreground: 166 76% 60%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 86% 97%;
+    --border: 220 32% 25%;
+    --input: 217 33% 19%;
+    --ring: 173 58% 31%;
+    --radius: 0.5rem;
+  }
+}
+
+/* ── Global reset ─────────────────────────────────────────────────── */
 * {
   margin: 0;
   padding: 0;

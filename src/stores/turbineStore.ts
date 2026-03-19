@@ -112,12 +112,10 @@ interface TurbineState {
   clearBlade: () => void
   deleteBladePoint: (index: number) => void
 
-  // Undo/redo
+  // Undo/redo (history-based, used by drawing ops)
   history: Vec2[][]
   historyIndex: number
   pushHistory: () => void
-  undo: () => void
-  redo: () => void
 
   // Drawing tools
   snapToGrid: boolean
@@ -274,27 +272,6 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
     const next = [...trimmed, clone].slice(-MAX_HISTORY)
     set({ history: next, historyIndex: next.length - 1 })
   },
-  undo: () => {
-    const { history, historyIndex } = get()
-    if (historyIndex <= 0) return
-    const newIndex = historyIndex - 1
-    const pts = history[newIndex].map(p => ({ ...p }))
-    _skipHistoryPush = true
-    set({ bladePoints: pts, historyIndex: newIndex, activePreset: null })
-    _skipHistoryPush = false
-    get().updatePhysics()
-  },
-  redo: () => {
-    const { history, historyIndex } = get()
-    if (historyIndex >= history.length - 1) return
-    const newIndex = historyIndex + 1
-    const pts = history[newIndex].map(p => ({ ...p }))
-    _skipHistoryPush = true
-    set({ bladePoints: pts, historyIndex: newIndex, activePreset: null })
-    _skipHistoryPush = false
-    get().updatePhysics()
-  },
-
   snapToGrid: false,
   setSnapToGrid: (v) => set({ snapToGrid: v }),
 

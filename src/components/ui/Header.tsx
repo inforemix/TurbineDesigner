@@ -1,6 +1,9 @@
 import { useTurbineStore } from '../../stores/turbineStore'
 import { usePuzzleStore } from '../../stores/puzzleStore'
 import { CHALLENGES } from '../../data/challenges'
+import { Badge } from './badge'
+import { Button } from './button'
+import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip'
 
 export default function Header() {
   const { mode, setMode, bloomTier } = useTurbineStore()
@@ -31,62 +34,58 @@ export default function Header() {
         <span className="text-sm font-semibold tracking-wide text-text">
           Turbine<span className="text-teal">Bloom</span>
         </span>
-        <span className="text-[9px] px-1.5 py-0.5 rounded bg-surface text-text-muted border border-border/50">
-          v0.2
-        </span>
+        <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 border-border/50 text-text-muted">
+          v0.3
+        </Badge>
       </div>
 
       {/* Mode Toggle */}
       <div className="flex items-center bg-surface rounded-lg border border-border/50 p-0.5">
-        <button
-          onClick={() => setMode('draw')}
-          className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-            mode === 'draw' ? 'bg-teal/20 text-teal shadow-sm' : 'text-text-muted hover:text-text'
-          }`}
-        >
-          ✎ Draw
-        </button>
-        <button
-          onClick={() => setMode('side')}
-          className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-            mode === 'side' ? 'bg-teal/20 text-teal shadow-sm' : 'text-text-muted hover:text-text'
-          }`}
-        >
-          ⬜ Side
-        </button>
-        <button
-          onClick={() => setMode('view')}
-          className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-            mode === 'view' ? 'bg-teal/20 text-teal shadow-sm' : 'text-text-muted hover:text-text'
-          }`}
-        >
-          ◇ 3D
-        </button>
+        {([
+          { value: 'draw', icon: '✎', label: 'Draw' },
+          { value: 'side', icon: '⬜', label: 'Side' },
+          { value: 'view', icon: '◇', label: '3D' },
+        ] as const).map((m) => (
+          <button
+            key={m.value}
+            onClick={() => setMode(m.value)}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+              mode === m.value ? 'bg-teal/20 text-teal shadow-sm' : 'text-text-muted hover:text-text'
+            }`}
+          >
+            {m.icon} {m.label}
+          </button>
+        ))}
       </div>
 
       {/* Right section */}
       <div className="flex items-center gap-2">
-        {/* Active challenge indicator */}
         {activeChallenge && (
-          <span className="hidden sm:flex items-center gap-1 text-[10px] text-teal border border-teal/25 rounded-full px-2 py-0.5 bg-teal/8">
+          <Badge variant="outline" className="hidden sm:flex gap-1 text-[10px] text-teal border-teal/25 bg-teal/8">
             <span>{activeChallenge.icon}</span>
             <span className="max-w-[100px] truncate">{activeChallenge.title}</span>
-          </span>
+          </Badge>
         )}
 
-        {/* Challenges button */}
-        <button
-          onClick={() => setShowChallengeList(!showChallengeList)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border border-border/50 bg-surface hover:border-teal/30 hover:text-teal text-text-dim"
-        >
-          <span>⚡</span>
-          <span className="hidden sm:inline">Challenges</span>
-          {totalCompleted > 0 && (
-            <span className="text-[9px] bg-teal/20 text-teal rounded-full px-1.5 py-0.5 border border-teal/20">
-              {totalCompleted}
-            </span>
-          )}
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowChallengeList(!showChallengeList)}
+              className="h-7 px-3 text-xs border-border/50 bg-surface text-text-dim hover:border-teal/30 hover:text-teal"
+            >
+              <span>⚡</span>
+              <span className="hidden sm:inline">Challenges</span>
+              {totalCompleted > 0 && (
+                <Badge className="text-[9px] h-4 px-1.5 bg-teal/20 text-teal border-teal/20">
+                  {totalCompleted}
+                </Badge>
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>View wind challenges</TooltipContent>
+        </Tooltip>
       </div>
     </header>
   )

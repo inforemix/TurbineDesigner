@@ -1,10 +1,16 @@
 import { useState } from 'react'
 import { useTurbineStore, type BloomTier, type SymmetryMode, type MaterialPreset, MATERIAL_PRESETS } from '../../stores/turbineStore'
 import DistributionEditor from './DistributionEditor'
+import { Slider } from './slider'
+import { Button } from './button'
+import { Label } from './label'
+import { Badge } from './badge'
+import { Separator } from './separator'
 import * as THREE from 'three'
 import { turbineCanvasRef, turbineGLRef, turbineSceneRef } from '../viewer/TurbineViewer'
 
-function Slider({
+// ── Labelled slider row using shadcn components ───────────────────────────────
+function ParamSlider({
   label,
   value,
   min,
@@ -21,96 +27,74 @@ function Slider({
   onChange: (v: number) => void
   unit?: string
 }) {
-  const pct = ((value - min) / (max - min)) * 100
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-1.5">
       <div className="flex justify-between items-center">
-        <span className="text-[11px] uppercase tracking-wider text-text-dim">{label}</span>
-        <span className="text-[11px] font-mono text-teal">{value.toFixed(step < 1 ? 1 : 0)}{unit}</span>
+        <Label className="text-[11px] uppercase tracking-wider text-text-dim">{label}</Label>
+        <span className="text-[11px] font-mono text-teal">
+          {value.toFixed(step < 1 ? (step < 0.1 ? 2 : 1) : 0)}{unit}
+        </span>
       </div>
-      <input
-        type="range"
+      <Slider
         min={min}
         max={max}
         step={step}
-        value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="w-full h-1.5 rounded-full appearance-none cursor-pointer
-          [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5
-          [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full
-          [&::-webkit-slider-thumb]:bg-teal [&::-webkit-slider-thumb]:shadow-[0_0_8px_rgba(45,212,191,0.4)]
-          [&::-webkit-slider-thumb]:cursor-pointer"
-        style={{
-          background: `linear-gradient(to right, #2dd4bf ${pct}%, #1e2844 ${pct}%)`,
-        }}
+        value={[value]}
+        onValueChange={([v]) => onChange(v)}
+        className="[&_[data-radix-slider-thumb]]:bg-teal [&_[data-radix-slider-thumb]]:border-teal/50 [&_[data-radix-slider-range]]:bg-teal"
       />
     </div>
   )
 }
 
+// ── Bloom tier config ─────────────────────────────────────────────────────────
 const TIER_CONFIG: Record<BloomTier, { label: string; color: string; icon: string }> = {
-  dormant: { label: 'Dormant', color: '#64748b', icon: '○' },
-  seedling: { label: 'Seedling', color: '#2dd4bf', icon: '◐' },
+  dormant:     { label: 'Dormant',     color: '#64748b', icon: '○' },
+  seedling:    { label: 'Seedling',    color: '#2dd4bf', icon: '◐' },
   flourishing: { label: 'Flourishing', color: '#fbbf24', icon: '◉' },
-  radiant: { label: 'Radiant', color: '#f472b6', icon: '✦' },
+  radiant:     { label: 'Radiant',     color: '#f472b6', icon: '✦' },
 }
 
 const SYMMETRY_OPTIONS: { value: SymmetryMode; label: string; desc: string }[] = [
-  { value: 'pinwheel', label: 'Pin', desc: 'Pinwheel' },
-  { value: 'helix', label: 'Hlx', desc: 'Helical' },
-  { value: 'snowflake', label: 'Snw', desc: 'Snowflake' },
-  { value: 'freeform', label: 'Free', desc: 'Freeform' },
+  { value: 'pinwheel',  label: 'Pin',  desc: 'Pinwheel' },
+  { value: 'helix',     label: 'Hlx',  desc: 'Helical' },
+  { value: 'snowflake', label: 'Snw',  desc: 'Snowflake' },
+  { value: 'freeform',  label: 'Free', desc: 'Freeform' },
 ]
 
 const MATERIAL_KEYS = Object.keys(MATERIAL_PRESETS) as MaterialPreset[]
 
+// ── Export helpers ────────────────────────────────────────────────────────────
 async function handleExportGLB() {
-  try {
-    const { generateTurbineMesh, exportToGLB } = await import('../../utils/meshGenerator')
-    const store = useTurbineStore.getState()
-    const group = generateTurbineMesh(
-      store.bladePoints,
-      store.bladeCount,
-      store.height,
-      store.twist,
-      store.taper,
-      store.thickness,
-      store.chordCurve,
-      store.twistCurve,
-    )
-    const blob = await exportToGLB(group)
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `turbine-bloom-${Date.now()}.glb`
-    a.click()
-    URL.revokeObjectURL(url)
-  } catch (err) {
-    console.error('GLB export failed:', err)
-  }
+  const { generateTurbineMesh, exportToGLB } = await import('../../utils/meshGenerator')
+  const store = useTurbineStore.getState()
+  const group = generateTurbineMesh(
+    store.bladePoints, store.bladeCount, store.height, store.twist,
+    store.taper, store.thickness, store.chordCurve, store.twistCurve,
+  )
+  const blob = await exportToGLB(group)
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `turbine-bloom-${Date.now()}.glb`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 function handleExportPNG() {
-  try {
-    const canvas = turbineCanvasRef
-    if (!canvas) {
-      console.error('No canvas available for PNG export')
-      return
-    }
-    // Force a render to ensure the buffer is current
-    if (turbineGLRef && turbineSceneRef) {
-      turbineGLRef.render(turbineSceneRef, turbineGLRef.domElement as unknown as THREE.Camera)
-    }
-    const dataUrl = canvas.toDataURL('image/png')
-    const a = document.createElement('a')
-    a.href = dataUrl
-    a.download = `turbine-bloom-${Date.now()}.png`
-    a.click()
-  } catch (err) {
-    console.error('PNG export failed:', err)
+  const canvas = turbineCanvasRef
+  if (!canvas) return
+  if (turbineGLRef && turbineSceneRef) {
+    turbineGLRef.render(turbineSceneRef, turbineGLRef.domElement as unknown as THREE.Camera)
   }
+  const dataUrl = canvas.toDataURL('image/png')
+  const a = document.createElement('a')
+  a.href = dataUrl
+  a.download = `turbine-bloom-${Date.now()}.png`
+  a.click()
 }
 
+// ── Main panel ────────────────────────────────────────────────────────────────
 export default function ParameterPanel() {
   const {
     bladeCount, setBladeCount,
@@ -119,9 +103,7 @@ export default function ParameterPanel() {
     twist: _twist, setTwist: _setTwist,
     taper: _taper, setTaper: _setTaper,
     thickness, setThickness,
-    bloomTier,
-    estimatedCp,
-    powerOutput,
+    bloomTier, estimatedCp, powerOutput,
     isSpinning, setIsSpinning,
     symmetryMode, setSymmetryMode,
     materialPreset, setMaterialPreset,
@@ -135,12 +117,12 @@ export default function ParameterPanel() {
   } = useTurbineStore()
 
   const [exportingGLB, setExportingGLB] = useState(false)
-
   const tier = TIER_CONFIG[bloomTier]
 
   return (
     <div className="flex flex-col gap-3 p-4 h-full overflow-y-auto">
-      {/* Bloom Status */}
+
+      {/* ── Bloom Status Card ──────────────────────────────────────────── */}
       <div
         className="rounded-xl p-3 border"
         style={{
@@ -151,16 +133,23 @@ export default function ParameterPanel() {
         <div className="flex items-center gap-2 mb-2">
           <span className="text-lg" style={{ color: tier.color }}>{tier.icon}</span>
           <span className="text-sm font-medium" style={{ color: tier.color }}>{tier.label}</span>
+          <Badge
+            variant="outline"
+            className="ml-auto text-[9px] h-4 px-1.5"
+            style={{ borderColor: tier.color + '40', color: tier.color }}
+          >
+            {bloomTier}
+          </Badge>
         </div>
         <div className="flex justify-between text-[10px] text-text-muted">
-          <span>Cp: {estimatedCp.toFixed(3)}</span>
-          <span>Power: {powerOutput.toFixed(1)}W</span>
+          <span>Cp: <span className="text-text-dim font-mono">{estimatedCp.toFixed(3)}</span></span>
+          <span>Power: <span className="text-text-dim font-mono">{powerOutput.toFixed(1)} W</span></span>
         </div>
       </div>
 
-      {/* Blade Count */}
+      {/* ── Blade Count ───────────────────────────────────────────────── */}
       <div>
-        <span className="text-[11px] uppercase tracking-wider text-text-dim block mb-2">Blades</span>
+        <Label className="text-[11px] uppercase tracking-wider text-text-dim block mb-2">Blades</Label>
         <div className="flex gap-1">
           {[2, 3, 4, 5, 6, 8].map((n) => (
             <button
@@ -178,9 +167,9 @@ export default function ParameterPanel() {
         </div>
       </div>
 
-      {/* Symmetry Mode */}
+      {/* ── Symmetry Mode ─────────────────────────────────────────────── */}
       <div>
-        <span className="text-[11px] uppercase tracking-wider text-text-dim block mb-2">Symmetry</span>
+        <Label className="text-[11px] uppercase tracking-wider text-text-dim block mb-2">Symmetry</Label>
         <div className="flex gap-1">
           {SYMMETRY_OPTIONS.map((opt) => (
             <button
@@ -199,22 +188,22 @@ export default function ParameterPanel() {
         </div>
       </div>
 
-      {/* Curve Detail + Parametric mode (draw mode) */}
+      {/* ── Draw-mode controls ────────────────────────────────────────── */}
       {mode === 'draw' && (
         <>
-          <Slider
+          <ParamSlider
             label="Curve Detail"
             value={curveSmoothing}
-            min={2}
-            max={20}
-            step={1}
+            min={2} max={20} step={1}
             onChange={setCurveSmoothing}
           />
 
+          <Separator className="bg-border/50" />
+
           {/* Parametric profile toggle */}
-          <div className="pt-2 border-t border-border/50">
+          <div>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] uppercase tracking-widest text-text-muted">Profile Shape</span>
+              <Label className="text-[10px] uppercase tracking-widest text-text-muted">Profile Shape</Label>
               <div className="flex items-center bg-surface rounded-lg border border-border/50 p-0.5">
                 <button
                   onClick={() => setParametricMode(false)}
@@ -237,119 +226,131 @@ export default function ParameterPanel() {
 
             {parametricMode && (
               <div className="flex flex-col gap-2">
-                <Slider label="Camber" value={parametricCamber} min={0} max={0.4} step={0.01}
+                <ParamSlider label="Camber" value={parametricCamber} min={0} max={0.4} step={0.01}
                   onChange={(v) => setParametric('parametricCamber', v)} />
-                <Slider label="Camber Peak" value={parametricCamberPeak} min={0.1} max={0.9} step={0.05}
+                <ParamSlider label="Camber Peak" value={parametricCamberPeak} min={0.1} max={0.9} step={0.05}
                   onChange={(v) => setParametric('parametricCamberPeak', v)} />
-                <Slider label="LE Radius" value={parametricLeRadius} min={0} max={0.3} step={0.01}
+                <ParamSlider label="LE Radius" value={parametricLeRadius} min={0} max={0.3} step={0.01}
                   onChange={(v) => setParametric('parametricLeRadius', v)} />
-                <Slider label="TE Sweep" value={parametricTrailingSweep} min={-0.3} max={0.3} step={0.01}
+                <ParamSlider label="TE Sweep" value={parametricTrailingSweep} min={-0.3} max={0.3} step={0.01}
                   onChange={(v) => setParametric('parametricTrailingSweep', v)} />
-                <button
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => setParametricMode(false)}
-                  className="mt-1 py-1 rounded-lg text-[10px] font-medium border border-border/50 bg-surface text-text-dim hover:border-teal/30 hover:text-teal transition-all"
+                  className="mt-1 h-7 text-[10px] border-border/50 bg-surface text-text-dim hover:border-teal/30 hover:text-teal"
                 >
                   Convert to Points
-                </button>
+                </Button>
               </div>
             )}
           </div>
         </>
       )}
 
-      {/* Wind */}
-      <Slider label="Wind Speed" value={windSpeed} min={0} max={25} step={0.5} onChange={setWindSpeed} unit=" m/s" />
+      {/* ── Wind ──────────────────────────────────────────────────────── */}
+      <ParamSlider label="Wind Speed" value={windSpeed} min={0} max={25} step={0.5} onChange={setWindSpeed} unit=" m/s" />
 
-      {/* Extrusion */}
-      <div className="pt-2 border-t border-border/50">
-        <span className="text-[10px] uppercase tracking-widest text-text-muted mb-2 block">Extrusion</span>
+      {/* ── Extrusion ─────────────────────────────────────────────────── */}
+      <Separator className="bg-border/50" />
+      <div>
+        <Label className="text-[10px] uppercase tracking-widest text-text-muted mb-2 block">Extrusion</Label>
         <div className="flex flex-col gap-2.5">
-          <Slider label="Height" value={height} min={0.5} max={3} step={0.1} onChange={setHeight} unit="m" />
-          <Slider label="Thickness" value={thickness} min={0.02} max={0.2} step={0.01} onChange={setThickness} />
+          <ParamSlider label="Height" value={height} min={0.5} max={3} step={0.1} onChange={setHeight} unit="m" />
+          <ParamSlider label="Thickness" value={thickness} min={0.02} max={0.2} step={0.01} onChange={setThickness} />
           <DistributionEditor
             label="Chord Distribution"
             points={chordCurve}
             onChange={setChordCurve}
-            yMin={0.1}
-            yMax={1.5}
+            yMin={0.1} yMax={1.5}
             color="#2dd4bf"
           />
           <DistributionEditor
             label="Twist Distribution"
             points={twistCurve}
             onChange={setTwistCurve}
-            yMin={0}
-            yMax={1}
+            yMin={0} yMax={1}
             color="#a78bfa"
           />
         </div>
       </div>
 
-      {/* Material Presets (only in view mode) */}
+      {/* ── Material (view mode only) ─────────────────────────────────── */}
       {mode === 'view' && (
-        <div className="pt-2 border-t border-border/50">
-          <span className="text-[10px] uppercase tracking-widest text-text-muted mb-2 block">Material</span>
-          <div className="grid grid-cols-2 gap-1">
-            {MATERIAL_KEYS.map((key) => {
-              const mat = MATERIAL_PRESETS[key]
-              return (
-                <button
-                  key={key}
-                  onClick={() => setMaterialPreset(key)}
-                  className={`py-1.5 px-2 rounded-lg text-[10px] font-medium transition-all flex items-center gap-1.5 ${
-                    materialPreset === key
-                      ? 'bg-teal/15 text-teal border border-teal/30'
-                      : 'bg-surface text-text-dim border border-border hover:border-teal/20'
-                  }`}
-                >
-                  <span
-                    className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-white/10"
-                    style={{ background: mat.color }}
-                  />
-                  {mat.label}
-                </button>
-              )
-            })}
+        <>
+          <Separator className="bg-border/50" />
+          <div>
+            <Label className="text-[10px] uppercase tracking-widest text-text-muted mb-2 block">Material</Label>
+            <div className="grid grid-cols-2 gap-1">
+              {MATERIAL_KEYS.map((key) => {
+                const mat = MATERIAL_PRESETS[key]
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setMaterialPreset(key)}
+                    className={`py-1.5 px-2 rounded-lg text-[10px] font-medium transition-all flex items-center gap-1.5 ${
+                      materialPreset === key
+                        ? 'bg-teal/15 text-teal border border-teal/30'
+                        : 'bg-surface text-text-dim border border-border hover:border-teal/20'
+                    }`}
+                  >
+                    <span
+                      className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-white/10"
+                      style={{ background: mat.color }}
+                    />
+                    {mat.label}
+                  </button>
+                )
+              })}
+            </div>
           </div>
-        </div>
+        </>
       )}
 
-      {/* Spin toggle */}
-      <button
+      {/* ── Spin toggle ───────────────────────────────────────────────── */}
+      <Button
+        variant={isSpinning ? 'default' : 'outline'}
+        size="sm"
         onClick={() => setIsSpinning(!isSpinning)}
-        className={`mt-2 py-2 rounded-lg text-xs font-medium transition-all border ${
+        className={`mt-1 h-8 text-xs ${
           isSpinning
-            ? 'bg-teal/15 text-teal border-teal/30'
-            : 'bg-surface text-text-dim border-border'
+            ? 'bg-teal/15 text-teal border border-teal/30 hover:bg-teal/25'
+            : 'bg-surface text-text-dim border-border hover:border-teal/20'
         }`}
       >
         {isSpinning ? '⟳ Spinning' : '⏸ Paused'}
-      </button>
+      </Button>
 
-      {/* Export Buttons (only in view mode) */}
+      {/* ── Export (view mode only) ───────────────────────────────────── */}
       {mode === 'view' && (
-        <div className="pt-2 border-t border-border/50">
-          <span className="text-[10px] uppercase tracking-widest text-text-muted mb-2 block">Export</span>
-          <div className="flex gap-2">
-            <button
-              onClick={async () => {
-                setExportingGLB(true)
-                await handleExportGLB()
-                setExportingGLB(false)
-              }}
-              disabled={exportingGLB}
-              className="flex-1 py-2 rounded-lg text-xs font-medium transition-all border bg-surface text-text-dim border-border hover:border-teal/30 hover:text-teal disabled:opacity-50"
-            >
-              {exportingGLB ? '...' : '↓ GLB'}
-            </button>
-            <button
-              onClick={handleExportPNG}
-              className="flex-1 py-2 rounded-lg text-xs font-medium transition-all border bg-surface text-text-dim border-border hover:border-teal/30 hover:text-teal"
-            >
-              ↓ PNG
-            </button>
+        <>
+          <Separator className="bg-border/50" />
+          <div>
+            <Label className="text-[10px] uppercase tracking-widest text-text-muted mb-2 block">Export</Label>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  setExportingGLB(true)
+                  try { await handleExportGLB() } finally { setExportingGLB(false) }
+                }}
+                disabled={exportingGLB}
+                className="flex-1 h-8 text-xs border-border/50 bg-surface text-text-dim hover:border-teal/30 hover:text-teal"
+              >
+                {exportingGLB ? '…' : '↓ GLB'}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportPNG}
+                className="flex-1 h-8 text-xs border-border/50 bg-surface text-text-dim hover:border-teal/30 hover:text-teal"
+              >
+                ↓ PNG
+              </Button>
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   )

@@ -1,6 +1,8 @@
 import { useRef, useEffect, useCallback, useState } from 'react'
 import { useTurbineStore, type Vec2 } from '../../stores/turbineStore'
 import { catmullRomSpline, mirrorPoints, simplifyPoints } from '../../utils/spline'
+
+const simplifyPath = simplifyPoints
 import { usePuzzleStore } from '../../stores/puzzleStore'
 import MiniTurbineViewer from '../viewer/MiniTurbineViewer'
 
