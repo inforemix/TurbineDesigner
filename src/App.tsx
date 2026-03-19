@@ -56,11 +56,11 @@ export default function App() {
       <div className="w-full h-full flex flex-col bg-background text-foreground">
         <Header />
 
-        {/* Main resizable layout */}
-        <div className="flex-1 overflow-hidden">
+        {/* Desktop layout with resizable panels */}
+        <div className="hidden lg:flex flex-1 overflow-hidden">
           <PanelGroup>
-            {/* Left sidebar - Presets */}
-            <Panel defaultSize={16} minSize={10} maxSize={28} className="hidden md:block bg-card border-r border-border">
+            {/* Left sidebar */}
+            <Panel defaultSize={18} minSize={12} maxSize={32} className="bg-card border-r border-border">
               <ScrollArea className="h-full">
                 <div className="p-4 space-y-6">
                   <PresetBrowser />
@@ -73,8 +73,7 @@ export default function App() {
               </ScrollArea>
             </Panel>
 
-            {/* Resize handle - left */}
-            <Separator className="w-1 bg-border hover:bg-primary/40 transition-colors" />
+            <Separator />
 
             {/* Main canvas */}
             <Panel defaultSize={55} minSize={35}>
@@ -99,18 +98,12 @@ export default function App() {
                   </div>
                 )}
               </div>
-
-              {/* Mobile preset button */}
-              <div className="absolute top-16 left-4 md:hidden z-20">
-                <MobilePresetDrawer />
-              </div>
             </Panel>
 
-            {/* Resize handle - right */}
-            <Separator className="w-1 bg-border hover:bg-primary/40 transition-colors hidden lg:block" />
+            <Separator />
 
-            {/* Right sidebar - Parameters */}
-            <Panel defaultSize={29} minSize={16} maxSize={40} className="hidden lg:block bg-card border-l border-border">
+            {/* Right sidebar */}
+            <Panel defaultSize={27} minSize={16} maxSize={40} className="bg-card border-l border-border">
               <ScrollArea className="h-full">
                 <div className="p-4 space-y-6">
                   <ParameterPanel />
@@ -128,6 +121,82 @@ export default function App() {
               </ScrollArea>
             </Panel>
           </PanelGroup>
+        </div>
+
+        {/* Tablet layout - left sidebar + main canvas only */}
+        <div className="hidden md:flex lg:hidden flex-1 overflow-hidden">
+          <PanelGroup>
+            {/* Left sidebar */}
+            <Panel defaultSize={22} minSize={14} maxSize={35} className="bg-card border-r border-border">
+              <ScrollArea className="h-full">
+                <div className="p-4 space-y-6">
+                  <PresetBrowser />
+                  {mode === 'draw' && (
+                    <div className="border-t border-border pt-6">
+                      <NacaPanel />
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+            </Panel>
+
+            <Separator />
+
+            {/* Main canvas + right content */}
+            <Panel minSize={40}>
+              <div className="h-full flex flex-col p-4 gap-3">
+                {mode === 'draw' ? (
+                  <div className="flex-1 flex flex-col gap-3 min-h-0">
+                    <div className="flex-1 relative rounded-lg border border-border overflow-hidden bg-background min-h-0">
+                      <KaleidoscopeCanvas />
+                      <PuzzleHUD />
+                      <CanvasHint text="Click to add · Drag to reshape · Ctrl+Z undo" />
+                    </div>
+                    <SectionPanel />
+                  </div>
+                ) : mode === 'side' ? (
+                  <div className="flex-1 rounded-lg border border-border overflow-hidden bg-background">
+                    <SideViewCanvas />
+                  </div>
+                ) : (
+                  <div className="flex-1 relative rounded-lg border border-border overflow-hidden bg-background">
+                    <TurbineViewer />
+                    <CanvasHint text="Drag to orbit · Scroll to zoom" />
+                  </div>
+                )}
+              </div>
+            </Panel>
+          </PanelGroup>
+        </div>
+
+        {/* Mobile layout - canvas only + bottom sheet */}
+        <div className="flex md:hidden flex-1 overflow-hidden relative">
+          <div className="h-full w-full flex flex-col p-3 gap-3">
+            {mode === 'draw' ? (
+              <div className="flex-1 flex flex-col gap-3 min-h-0">
+                <div className="flex-1 relative rounded-lg border border-border overflow-hidden bg-background min-h-0">
+                  <KaleidoscopeCanvas />
+                  <PuzzleHUD />
+                  <CanvasHint text="Click to add · Drag to reshape · Ctrl+Z undo" />
+                </div>
+                <SectionPanel />
+              </div>
+            ) : mode === 'side' ? (
+              <div className="flex-1 rounded-lg border border-border overflow-hidden bg-background">
+                <SideViewCanvas />
+              </div>
+            ) : (
+              <div className="flex-1 relative rounded-lg border border-border overflow-hidden bg-background">
+                <TurbineViewer />
+                <CanvasHint text="Drag to orbit · Scroll to zoom" />
+              </div>
+            )}
+          </div>
+
+          {/* Mobile preset button */}
+          <div className="absolute top-4 left-4 z-20">
+            <MobilePresetDrawer />
+          </div>
         </div>
 
         {/* Mobile bottom bar */}
