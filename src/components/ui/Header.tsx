@@ -49,6 +49,7 @@ export default function Header() {
       <div className="flex items-center bg-background rounded-lg border border-border p-1 gap-0.5">
         {([
           { value: 'draw', label: 'Draw'  },
+          { value: 'airfoil', label: 'Airfoil' },
           { value: 'side', label: 'Side'  },
           { value: 'view', label: '3D'    },
         ] as const).map((m) => (
