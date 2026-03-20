@@ -271,7 +271,7 @@ function TurbineMesh() {
     }
 
     return bladeGeometries
-  }, [bladePoints, bladeCount, height, twist, taper, thickness, symmetryMode, curveSmoothing,
+  }, [bladePoints, bladeHandles, bladeCount, height, twist, taper, thickness, symmetryMode, curveSmoothing,
       chordCurve, twistCurve, bladeSections, airfoilPreset, customNacaM, customNacaP, customNacaT])
 
   // Neon shader material uniforms (initialized once, updated live in useFrame)
