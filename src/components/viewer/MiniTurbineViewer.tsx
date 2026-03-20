@@ -16,40 +16,44 @@ function MiniTurbineMesh() {
     const heightSegments = 12
     const curveSegments = smooth.length
     const isHelical = symmetryMode === 'helix'
+    const isSnowflake = symmetryMode === 'snowflake'
+    const camberSigns = isSnowflake ? [1, -1] : [1]
     const geos: THREE.BufferGeometry[] = []
 
     for (let b = 0; b < bladeCount; b++) {
-      const positions: number[] = []
-      const indices: number[] = []
-      for (let h = 0; h <= heightSegments; h++) {
-        const hFrac = h / heightSegments
-        const y = height * 0.25 + hFrac * height * 0.8
-        const twistAngle = twist * hFrac * (Math.PI / 180)
-        const taperScale = 1.0 - taper * Math.abs(hFrac - 0.5) * 2
-        const helicalOffset = isHelical ? hFrac * Math.PI * 0.5 : 0
-        for (let c = 0; c < curveSegments; c++) {
-          const pt = smooth[c]
-          const radialDist = pt.x * bladeRadius * taperScale
-          const camber = pt.y * bladeRadius * taperScale
-          const totalTwist = twistAngle + helicalOffset
-          const cos = Math.cos(totalTwist), sin = Math.sin(totalTwist)
-          positions.push(radialDist * cos - camber * sin, y, radialDist * sin + camber * cos)
+      for (const camberSign of camberSigns) {
+        const positions: number[] = []
+        const indices: number[] = []
+        for (let h = 0; h <= heightSegments; h++) {
+          const hFrac = h / heightSegments
+          const y = height * 0.25 + hFrac * height * 0.8
+          const twistAngle = twist * hFrac * (Math.PI / 180)
+          const taperScale = 1.0 - taper * Math.abs(hFrac - 0.5) * 2
+          const helicalOffset = isHelical ? hFrac * Math.PI * 0.5 : 0
+          for (let c = 0; c < curveSegments; c++) {
+            const pt = smooth[c]
+            const radialDist = pt.x * bladeRadius * taperScale
+            const camber = pt.y * bladeRadius * taperScale * camberSign
+            const totalTwist = twistAngle + helicalOffset
+            const cos = Math.cos(totalTwist), sin = Math.sin(totalTwist)
+            positions.push(radialDist * cos - camber * sin, y, radialDist * sin + camber * cos)
+          }
         }
-      }
-      for (let h = 0; h < heightSegments; h++) {
-        for (let c = 0; c < curveSegments - 1; c++) {
-          const a = h * curveSegments + c
-          const bIdx = a + curveSegments
-          const c1 = a + 1, d = bIdx + 1
-          indices.push(a, bIdx, c1, c1, bIdx, d)
+        for (let h = 0; h < heightSegments; h++) {
+          for (let c = 0; c < curveSegments - 1; c++) {
+            const a = h * curveSegments + c
+            const bIdx = a + curveSegments
+            const c1 = a + 1, d = bIdx + 1
+            indices.push(a, bIdx, c1, c1, bIdx, d)
+          }
         }
+        const geo = new THREE.BufferGeometry()
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+        geo.setIndex(indices)
+        geo.computeVertexNormals()
+        geo.rotateY((b / bladeCount) * Math.PI * 2)
+        geos.push(geo)
       }
-      const geo = new THREE.BufferGeometry()
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-      geo.setIndex(indices)
-      geo.computeVertexNormals()
-      geo.rotateY((b / bladeCount) * Math.PI * 2)
-      geos.push(geo)
     }
     return { geos, turbineHeight: height }
   }, [bladePoints, bladeCount, height, twist, taper, symmetryMode, curveSmoothing])

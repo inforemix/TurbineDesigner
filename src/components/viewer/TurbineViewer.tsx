@@ -99,66 +99,72 @@ function TurbineMesh() {
     const heightSegments = 24
     const curveSegments = smooth.length
     const isHelical = symmetryMode === 'helix'
+    const isSnowflake = symmetryMode === 'snowflake'
+
+    // Snowflake generates bilateral pairs (camberSign ±1) per arm
+    const camberSigns = isSnowflake ? [1, -1] : [1]
 
     const bladeGeometries: THREE.BufferGeometry[] = []
 
     for (let b = 0; b < bladeCount; b++) {
-      const positions: number[] = []
-      const indices: number[] = []
+      for (const camberSign of camberSigns) {
+        const positions: number[] = []
+        const indices: number[] = []
 
-      for (let h = 0; h <= heightSegments; h++) {
-        const hFrac = h / heightSegments
-        const y = height * 0.25 + hFrac * height * 0.8
+        for (let h = 0; h <= heightSegments; h++) {
+          const hFrac = h / heightSegments
+          const y = height * 0.25 + hFrac * height * 0.8
 
-        let sectionTwistOffset = 0
-        let sectionTaperScale = 1.0
-        if (bladeSections.length >= 2) {
-          let lo = 0
-          for (let s = 0; s < bladeSections.length - 1; s++) {
-            if (bladeSections[s + 1].heightFraction >= hFrac) { lo = s; break }
-            lo = s
+          let sectionTwistOffset = 0
+          let sectionTaperScale = 1.0
+          if (bladeSections.length >= 2) {
+            let lo = 0
+            for (let s = 0; s < bladeSections.length - 1; s++) {
+              if (bladeSections[s + 1].heightFraction >= hFrac) { lo = s; break }
+              lo = s
+            }
+            const hi = Math.min(lo + 1, bladeSections.length - 1)
+            const loSec = bladeSections[lo]
+            const hiSec = bladeSections[hi]
+            const range = hiSec.heightFraction - loSec.heightFraction
+            const t = range > 0 ? (hFrac - loSec.heightFraction) / range : 0
+            sectionTwistOffset = loSec.twistOffset + (hiSec.twistOffset - loSec.twistOffset) * t
+            sectionTaperScale = loSec.taperScale + (hiSec.taperScale - loSec.taperScale) * t
           }
-          const hi = Math.min(lo + 1, bladeSections.length - 1)
-          const loSec = bladeSections[lo]
-          const hiSec = bladeSections[hi]
-          const range = hiSec.heightFraction - loSec.heightFraction
-          const t = range > 0 ? (hFrac - loSec.heightFraction) / range : 0
-          sectionTwistOffset = loSec.twistOffset + (hiSec.twistOffset - loSec.twistOffset) * t
-          sectionTaperScale = loSec.taperScale + (hiSec.taperScale - loSec.taperScale) * t
+
+          const twistAngle = (twist * hFrac + sectionTwistOffset) * (Math.PI / 180)
+          const taperScale = (1.0 - taper * Math.abs(hFrac - 0.5) * 2) * sectionTaperScale
+
+          const helicalOffset = isHelical ? hFrac * Math.PI * 0.5 : 0
+
+          for (let c = 0; c < curveSegments; c++) {
+            const pt = smooth[c]
+            const radialDist = pt.x * bladeRadius * taperScale
+            const camber = pt.y * bladeRadius * taperScale * camberSign
+            const totalTwist = twistAngle + helicalOffset
+            const cos = Math.cos(totalTwist)
+            const sin = Math.sin(totalTwist)
+            positions.push(radialDist * cos - camber * sin, y, radialDist * sin + camber * cos)
+          }
         }
 
-        const twistAngle = (twist * hFrac + sectionTwistOffset) * (Math.PI / 180)
-        const taperScale = (1.0 - taper * Math.abs(hFrac - 0.5) * 2) * sectionTaperScale
-
-        const helicalOffset = isHelical ? hFrac * Math.PI * 0.5 : 0
-
-        for (let c = 0; c < curveSegments; c++) {
-          const pt = smooth[c]
-          const radialDist = pt.x * bladeRadius * taperScale
-          const camber = pt.y * bladeRadius * taperScale
-          const totalTwist = twistAngle + helicalOffset
-          const cos = Math.cos(totalTwist)
-          const sin = Math.sin(totalTwist)
-          positions.push(radialDist * cos - camber * sin, y, radialDist * sin + camber * cos)
+        for (let h = 0; h < heightSegments; h++) {
+          for (let c = 0; c < curveSegments - 1; c++) {
+            const a = h * curveSegments + c
+            const bIdx = a + curveSegments
+            const c1 = a + 1
+            const d = bIdx + 1
+            indices.push(a, bIdx, c1, c1, bIdx, d)
+          }
         }
+
+        const geo = new THREE.BufferGeometry()
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+        geo.setIndex(indices)
+        geo.computeVertexNormals()
+        geo.rotateY((b / bladeCount) * Math.PI * 2)
+        bladeGeometries.push(geo)
       }
-
-      for (let h = 0; h < heightSegments; h++) {
-        for (let c = 0; c < curveSegments - 1; c++) {
-          const a = h * curveSegments + c
-          const bIdx = a + curveSegments
-          const c1 = a + 1
-          const d = bIdx + 1
-          indices.push(a, bIdx, c1, c1, bIdx, d)
-        }
-      }
-
-      const geo = new THREE.BufferGeometry()
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-      geo.setIndex(indices)
-      geo.computeVertexNormals()
-      geo.rotateY((b / bladeCount) * Math.PI * 2)
-      bladeGeometries.push(geo)
     }
 
     return bladeGeometries
@@ -210,9 +216,10 @@ function TurbineMesh() {
     roughness: 0.3,
   }), [])
 
-  // Initialize blade reveals array
-  if (bladeReveals.current.length !== bladeCount) {
-    bladeReveals.current = Array(bladeCount).fill(0)
+  // Initialize blade reveals array (sized to actual mesh count)
+  const meshCount = meshData ? meshData.length : bladeCount
+  if (bladeReveals.current.length !== meshCount) {
+    bladeReveals.current = Array(meshCount).fill(0)
   }
 
   useFrame((_, delta) => {
@@ -231,8 +238,8 @@ function TurbineMesh() {
       const shaftT = Math.max(0, Math.min(1, tp / 0.5))
       shaftReveal.current = easeOutCubic(shaftT)
 
-      for (let i = 0; i < bladeCount; i++) {
-        const start = 0.2 + i * (0.55 / Math.max(1, bladeCount))
+      for (let i = 0; i < meshCount; i++) {
+        const start = 0.2 + i * (0.55 / Math.max(1, meshCount))
         const end = start + 0.3
         const bladeT = Math.max(0, Math.min(1, (tp - start) / (end - start)))
         bladeReveals.current[i] = easeOutBack(bladeT)

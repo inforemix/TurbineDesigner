@@ -3,6 +3,155 @@ import { useTurbineStore, type Vec2 } from '../../stores/turbineStore'
 import { catmullRomSpline, mirrorPoints } from '../../utils/spline'
 import { Bezier } from 'bezier-js'
 
+/* ------------------------------------------------------------------ */
+/*  Snowflake tree-branch renderer                                     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Recursively draws one arm of a snowflake with bilateral symmetry
+ * and fractal sub-branches (tree branch / L-system style).
+ *
+ * Each call draws:
+ *  1. A bilateral pair of strokes (normal + y-mirrored camber)
+ *  2. Sub-branches at fixed radial fractions going ±60°
+ */
+function drawSnowflakeArm(
+  ctx: CanvasRenderingContext2D,
+  smooth: Vec2[],
+  ox: number, oy: number,   // arm origin in canvas px
+  radius: number,           // canvas radius scale
+  angle: number,            // direction of this arm
+  scale: number,            // size multiplier (1 = full, shrinks each level)
+  depth: number,
+  maxDepth: number,
+): void {
+  if (scale < 0.06 || smooth.length < 2) return
+
+  const cos = Math.cos(angle)
+  const sin = Math.sin(angle)
+
+  // ── Glow bloom (depth-0 only) ─────────────────────────────────────
+  if (depth === 0) {
+    for (const m of [1, -1]) {
+      ctx.beginPath()
+      for (let i = 0; i < smooth.length; i++) {
+        const px = ox + smooth[i].x * radius * scale * cos - smooth[i].y * radius * scale * m * sin
+        const py = oy + smooth[i].x * radius * scale * sin + smooth[i].y * radius * scale * m * cos
+        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py)
+      }
+      ctx.strokeStyle = 'rgba(45,212,191,0.09)'
+      ctx.lineWidth = 10
+      ctx.lineCap = 'round'
+      ctx.lineJoin = 'round'
+      ctx.stroke()
+    }
+  }
+
+  // ── Filled area (depth-0 bilateral fill) ──────────────────────────
+  if (depth === 0) {
+    for (const m of [1, -1]) {
+      ctx.beginPath()
+      ctx.moveTo(ox, oy)
+      for (const pt of smooth) {
+        ctx.lineTo(
+          ox + pt.x * radius * scale * cos - pt.y * radius * scale * m * sin,
+          oy + pt.x * radius * scale * sin + pt.y * radius * scale * m * cos,
+        )
+      }
+      ctx.closePath()
+      const hue = 185
+      ctx.fillStyle = `hsla(${hue},70%,60%,0.07)`
+      ctx.fill()
+    }
+  }
+
+  // ── Bilateral stroke pair ─────────────────────────────────────────
+  const hue = 174 + depth * 14          // teal → cyan → blue by depth
+  const bright = 65 - depth * 6
+  const alpha = 0.85 - depth * 0.22
+  const lw = Math.max(0.5, (2.8 - depth * 0.75) * scale)
+
+  for (const m of [1, -1]) {
+    ctx.beginPath()
+    for (let i = 0; i < smooth.length; i++) {
+      const px = ox + smooth[i].x * radius * scale * cos - smooth[i].y * radius * scale * m * sin
+      const py = oy + smooth[i].x * radius * scale * sin + smooth[i].y * radius * scale * m * cos
+      i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py)
+    }
+    ctx.strokeStyle = `hsla(${hue},72%,${bright}%,${alpha})`
+    ctx.lineWidth = lw
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    ctx.stroke()
+  }
+
+  // ── Sub-branches (tree-branch fractal) ───────────────────────────
+  if (depth >= maxDepth) return
+
+  // Branch positions along the arm (radial fraction of arm length)
+  const branchFracs = depth === 0
+    ? [0.38, 0.60, 0.78]  // 3 branch nodes on main arm
+    : [0.52]              // 1 branch node on sub-arms
+
+  const branchAngleDelta = depth === 0
+    ? Math.PI / 3         // 60° off main arm
+    : Math.PI * 5 / 12   // 75° off sub-arms (tighter dendrite look)
+
+  const branchScale = depth === 0 ? 0.40 : 0.42
+
+  for (const frac of branchFracs) {
+    // Origin of the sub-branch: point along arm's central (zero-camber) axis
+    const bx = ox + frac * radius * scale * cos
+    const by = oy + frac * radius * scale * sin
+
+    for (const sign of [1, -1]) {
+      drawSnowflakeArm(
+        ctx, smooth, bx, by, radius,
+        angle + sign * branchAngleDelta,
+        branchScale,
+        depth + 1, maxDepth,
+      )
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Pinwheel spin-direction arc                                        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Draws a subtle directional arc at the tip of each blade to show
+ * the pinwheel's rotational sweep direction.
+ */
+function drawPinwheelSweepArcs(
+  ctx: CanvasRenderingContext2D,
+  bladeCount: number,
+  cx: number, cy: number, radius: number,
+  smooth: Vec2[],
+  time: number,
+) {
+  const tipFrac = 0.85
+  const tipPt = smooth[Math.floor(tipFrac * (smooth.length - 1))]
+  if (!tipPt) return
+
+  const arcR = tipPt.x * radius * 0.22
+  const breathe = 0.5 + Math.sin(time * 1.8) * 0.15
+
+  for (let b = 0; b < bladeCount; b++) {
+    const angle = (b / bladeCount) * Math.PI * 2
+    const tipX = cx + tipPt.x * radius * Math.cos(angle) - tipPt.y * radius * Math.sin(angle)
+    const tipY = cy + tipPt.x * radius * Math.sin(angle) + tipPt.y * radius * Math.cos(angle)
+
+    ctx.beginPath()
+    // Arc sweeping in the "forward" rotation direction
+    ctx.arc(tipX, tipY, arcR * breathe, angle + 0.1, angle + 0.85, false)
+    ctx.strokeStyle = 'rgba(94,234,212,0.22)'
+    ctx.lineWidth = 1.5
+    ctx.lineCap = 'round'
+    ctx.stroke()
+  }
+}
+
 import { usePuzzleStore } from '../../stores/puzzleStore'
 import MiniTurbineViewer from '../viewer/MiniTurbineViewer'
 
@@ -511,80 +660,89 @@ export default function KaleidoscopeCanvas() {
 
       if (pts.length >= 2) {
         const smooth = catmullRomSpline(pts, cs)
-        const mirrored = mirrorPoints(smooth, bc, cx, cy, radius)
 
-        // ── Filled blade area (swept petal shape per blade) ──────────────────
-        mirrored.forEach((blade, idx) => {
-          if (blade.length < 2) return
-
-          // Build closed petal: curve out → radial line back to center
-          const isFirst = idx === 0
-          const angle = (idx / bc) * Math.PI * 2
-          const edgeX = cx + Math.cos(angle) * radius
-          const edgeY = cy + Math.sin(angle) * radius
-
-          ctx.beginPath()
-          ctx.moveTo(cx, cy)
-          for (let i = 0; i < blade.length; i++) {
-            ctx.lineTo(blade[i].x, blade[i].y)
+        if (store.symmetryMode === 'snowflake') {
+          // ── Snowflake: tree-branch bilateral fractal per arm ──────────────
+          for (let b = 0; b < bc; b++) {
+            const armAngle = (b / bc) * Math.PI * 2
+            drawSnowflakeArm(ctx, smooth, cx, cy, radius, armAngle, 1.0, 0, 2)
           }
-          // Close back along the radial baseline
-          ctx.lineTo(edgeX, edgeY)
-          ctx.closePath()
+        } else {
+          const mirrored = mirrorPoints(smooth, bc, cx, cy, radius)
 
-          // Fill: primary blade brighter, others dimmer
-          const fillAlpha = isFirst ? 0.13 : 0.06
-          const hue = 174 + idx * (30 / bc)
-          ctx.fillStyle = `hsla(${hue}, 65%, 55%, ${fillAlpha})`
-          ctx.fill()
-        })
+          // ── Filled blade area (swept petal shape per blade) ────────────────
+          mirrored.forEach((blade, idx) => {
+            if (blade.length < 2) return
 
-        // ── Glow pass ──────────────────────────────────────────────────────
-        mirrored.forEach((blade) => {
-          if (blade.length < 2) return
-          ctx.beginPath()
-          ctx.moveTo(blade[0].x, blade[0].y)
-          for (let i = 1; i < blade.length; i++) {
-            ctx.lineTo(blade[i].x, blade[i].y)
-          }
-          ctx.strokeStyle = 'rgba(45, 212, 191, 0.12)'
-          ctx.lineWidth = 8
-          ctx.lineCap = 'round'
-          ctx.lineJoin = 'round'
-          ctx.stroke()
-        })
+            const isFirst = idx === 0
+            const angle = (idx / bc) * Math.PI * 2
+            const edgeX = cx + Math.cos(angle) * radius
+            const edgeY = cy + Math.sin(angle) * radius
 
-        // ── Main blade lines (first blade brighter/thicker) ────────────────
-        mirrored.forEach((blade, idx) => {
-          if (blade.length < 2) return
-          ctx.beginPath()
-          ctx.moveTo(blade[0].x, blade[0].y)
-          for (let i = 1; i < blade.length; i++) {
-            ctx.lineTo(blade[i].x, blade[i].y)
-          }
-          const tier = store.bloomTier
-          const alpha = tier === 'radiant' ? 0.95 : tier === 'flourishing' ? 0.85 : 0.7
-          const hue = 174 + idx * (30 / bc)
-          // Primary blade (idx=0) gets extra thickness + brightness
-          const isFirst = idx === 0
-          ctx.strokeStyle = `hsla(${hue}, 70%, ${isFirst ? 65 : 55}%, ${isFirst ? Math.min(1, alpha + 0.2) : alpha})`
-          ctx.lineWidth = isFirst ? 3 : 2
-          ctx.lineCap = 'round'
-          ctx.lineJoin = 'round'
-          ctx.stroke()
+            ctx.beginPath()
+            ctx.moveTo(cx, cy)
+            for (let i = 0; i < blade.length; i++) {
+              ctx.lineTo(blade[i].x, blade[i].y)
+            }
+            ctx.lineTo(edgeX, edgeY)
+            ctx.closePath()
 
-          // Extra bright inner stroke for primary blade
-          if (isFirst) {
+            const fillAlpha = isFirst ? 0.13 : 0.06
+            const hue = 174 + idx * (30 / bc)
+            ctx.fillStyle = `hsla(${hue}, 65%, 55%, ${fillAlpha})`
+            ctx.fill()
+          })
+
+          // ── Glow pass ────────────────────────────────────────────────────
+          mirrored.forEach((blade) => {
+            if (blade.length < 2) return
             ctx.beginPath()
             ctx.moveTo(blade[0].x, blade[0].y)
             for (let i = 1; i < blade.length; i++) {
               ctx.lineTo(blade[i].x, blade[i].y)
             }
-            ctx.strokeStyle = 'rgba(94, 234, 212, 0.35)'
-            ctx.lineWidth = 1
+            ctx.strokeStyle = 'rgba(45, 212, 191, 0.12)'
+            ctx.lineWidth = 8
+            ctx.lineCap = 'round'
+            ctx.lineJoin = 'round'
             ctx.stroke()
+          })
+
+          // ── Main blade lines (first blade brighter/thicker) ──────────────
+          mirrored.forEach((blade, idx) => {
+            if (blade.length < 2) return
+            ctx.beginPath()
+            ctx.moveTo(blade[0].x, blade[0].y)
+            for (let i = 1; i < blade.length; i++) {
+              ctx.lineTo(blade[i].x, blade[i].y)
+            }
+            const tier = store.bloomTier
+            const alpha = tier === 'radiant' ? 0.95 : tier === 'flourishing' ? 0.85 : 0.7
+            const hue = 174 + idx * (30 / bc)
+            const isFirst = idx === 0
+            ctx.strokeStyle = `hsla(${hue}, 70%, ${isFirst ? 65 : 55}%, ${isFirst ? Math.min(1, alpha + 0.2) : alpha})`
+            ctx.lineWidth = isFirst ? 3 : 2
+            ctx.lineCap = 'round'
+            ctx.lineJoin = 'round'
+            ctx.stroke()
+
+            if (isFirst) {
+              ctx.beginPath()
+              ctx.moveTo(blade[0].x, blade[0].y)
+              for (let i = 1; i < blade.length; i++) {
+                ctx.lineTo(blade[i].x, blade[i].y)
+              }
+              ctx.strokeStyle = 'rgba(94, 234, 212, 0.35)'
+              ctx.lineWidth = 1
+              ctx.stroke()
+            }
+          })
+
+          // ── Pinwheel: directional sweep arcs at blade tips ────────────────
+          if (store.symmetryMode === 'pinwheel') {
+            drawPinwheelSweepArcs(ctx, bc, cx, cy, radius, smooth, timeRef.current)
           }
-        })
+        }
 
         // ── Control points with hover effects ──────────────────────────────
         const mpx = mousePxRef.current
