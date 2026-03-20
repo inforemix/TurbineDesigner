@@ -1,6 +1,6 @@
 import { useRef, useEffect } from 'react'
 import { useTurbineStore } from '../../stores/turbineStore'
-import { catmullRomSpline } from '../../utils/spline'
+import { catmullRomSplineWithHandles } from '../../utils/spline'
 import { resolveProfileData } from '../../utils/airfoil'
 
 /**
@@ -33,7 +33,7 @@ export default function SectionPreview() {
     const render = () => {
       const store = useTurbineStore.getState()
       const {
-        bladePoints, bladeSections, selectedSectionIndex,
+        bladePoints, bladeHandles, bladeSections, selectedSectionIndex,
         twist, taper, thickness,
         airfoilPreset, customNacaM, customNacaP, customNacaT,
       } = store
@@ -63,7 +63,7 @@ export default function SectionPreview() {
         return
       }
 
-      const smooth = catmullRomSpline(bladePoints, 8)
+      const smooth = catmullRomSplineWithHandles(bladePoints, bladeHandles ?? [], 8)
       const cx = w / 2
       const cy = h / 2
       const scale = Math.min(w, h) * 0.35

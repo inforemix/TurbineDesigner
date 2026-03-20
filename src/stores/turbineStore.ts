@@ -174,6 +174,12 @@ interface TurbineState {
   clearBlade: () => void
   deleteBladePoint: (index: number) => void
 
+  // Bezier tangent handles (one per blade point, {0,0} = auto Catmull-Rom)
+  bladeHandles: Vec2[]
+  updateBladeHandle: (index: number, handle: Vec2) => void
+  resetBladeHandle: (index: number) => void
+  resetAllHandles: () => void
+
   // Undo/redo (history-based, used by drawing ops)
   history: Vec2[][]
   historyIndex: number
@@ -316,15 +322,20 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
   setTransitionProgress: (v) => set({ transitionProgress: v }),
 
   bladePoints: [...PRESETS['Breeze Petal']],
+  bladeHandles: PRESETS['Breeze Petal'].map(() => ({ x: 0, y: 0 })),
   setBladePoints: (pts) => {
     if (!_skipHistoryPush) get().pushHistory()
-    set({ bladePoints: pts, activePreset: null })
+    // Resize handles: keep existing, fill new with zeros
+    const prev = get().bladeHandles
+    const handles = pts.map((_, i) => prev[i] ?? { x: 0, y: 0 })
+    set({ bladePoints: pts, bladeHandles: handles, activePreset: null })
     get().updatePhysics()
   },
   addBladePoint: (pt) => {
     if (!_skipHistoryPush) get().pushHistory()
     const pts = [...get().bladePoints, pt]
-    set({ bladePoints: pts, activePreset: null })
+    const handles = [...get().bladeHandles, { x: 0, y: 0 }]
+    set({ bladePoints: pts, bladeHandles: handles, activePreset: null })
     get().updatePhysics()
   },
   updateBladePoint: (index, pt) => {
@@ -336,14 +347,28 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
   },
   clearBlade: () => {
     get().pushHistory()
-    set({ bladePoints: [], activePreset: null })
+    set({ bladePoints: [], bladeHandles: [], activePreset: null })
     get().updatePhysics()
   },
   deleteBladePoint: (index) => {
     get().pushHistory()
     const pts = get().bladePoints.filter((_, i) => i !== index)
-    set({ bladePoints: pts, activePreset: null })
+    const handles = get().bladeHandles.filter((_, i) => i !== index)
+    set({ bladePoints: pts, bladeHandles: handles, activePreset: null })
     get().updatePhysics()
+  },
+  updateBladeHandle: (index, handle) => {
+    const handles = [...get().bladeHandles]
+    handles[index] = handle
+    set({ bladeHandles: handles })
+  },
+  resetBladeHandle: (index) => {
+    const handles = [...get().bladeHandles]
+    handles[index] = { x: 0, y: 0 }
+    set({ bladeHandles: handles })
+  },
+  resetAllHandles: () => {
+    set({ bladeHandles: get().bladePoints.map(() => ({ x: 0, y: 0 })) })
   },
 
   history: [],
@@ -476,7 +501,7 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
     if (pts) {
       get().pushHistory()
       get().pushUndo()
-      set({ bladePoints: [...pts], activePreset: name })
+      set({ bladePoints: [...pts], bladeHandles: pts.map(() => ({ x: 0, y: 0 })), activePreset: name })
       get().updatePhysics()
     }
   },
@@ -552,6 +577,7 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
     get().pushUndo()
     set({
       bladePoints: design.bladePoints.map(p => ({ ...p })),
+      bladeHandles: design.bladePoints.map(() => ({ x: 0, y: 0 })),
       bladeCount: design.bladeCount,
       height: design.height,
       twist: design.twist,

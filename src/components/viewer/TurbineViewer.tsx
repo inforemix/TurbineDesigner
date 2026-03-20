@@ -4,7 +4,7 @@ import { OrbitControls, ContactShadows, Float } from '@react-three/drei'
 import * as THREE from 'three'
 import { useTurbineStore, MATERIAL_PRESETS } from '../../stores/turbineStore'
 import { useThemeStore } from '../../stores/themeStore'
-import { catmullRomSpline } from '../../utils/spline'
+import { catmullRomSplineWithHandles } from '../../utils/spline'
 import { resolveProfileData, halfThickNorm } from '../../utils/airfoil'
 
 function easeOutCubic(t: number) { return 1 - Math.pow(1 - t, 3) }
@@ -83,7 +83,7 @@ function TurbineMesh() {
   const wireframeOpacity = useRef(0.8)
 
   const {
-    bladePoints, bladeCount, height, twist, taper, thickness,
+    bladePoints, bladeHandles, bladeCount, height, twist, taper, thickness,
     windSpeed, isSpinning, symmetryMode, materialPreset, isTransitioning, transitionProgress, curveSmoothing,
     chordCurve, twistCurve, bladeSections,
     airfoilPreset, customNacaM, customNacaP, customNacaT,
@@ -96,7 +96,7 @@ function TurbineMesh() {
   const meshData = useMemo(() => {
     if (bladePoints.length < 2) return null
 
-    const smooth = catmullRomSpline(bladePoints, curveSmoothing)
+    const smooth = catmullRomSplineWithHandles(bladePoints, bladeHandles ?? [], curveSmoothing)
     const bladeRadius = 0.6
     const heightSegments = 24
     const cs = smooth.length          // curveSegments

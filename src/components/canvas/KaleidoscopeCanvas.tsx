@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback, useState } from 'react'
 import { useTurbineStore, type Vec2 } from '../../stores/turbineStore'
-import { catmullRomSpline, mirrorPoints } from '../../utils/spline'
+import { catmullRomSplineWithHandles, crAutoTangent, mirrorPoints } from '../../utils/spline'
 import { Bezier } from 'bezier-js'
 
 /* ------------------------------------------------------------------ */
@@ -453,10 +453,14 @@ function ShapeThumb({ pts }: { pts: Vec2[] }) {
   )
 }
 
+// Handle side: 'out' = forward tangent, 'in' = mirrored backward tangent
+interface HandleDrag { index: number; side: 'out' | 'in' }
+
 export default function KaleidoscopeCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [isDrawing, setIsDrawing] = useState(false)
   const [dragIndex, setDragIndex] = useState<number | null>(null)
+  const [dragHandle, setDragHandle] = useState<HandleDrag | null>(null)
   const animFrameRef = useRef<number>(0)
   const timeRef = useRef(0)
   const [showMiniPreview, setShowMiniPreview] = useState(false)
@@ -473,6 +477,10 @@ export default function KaleidoscopeCanvas() {
     setBladePoints,
     updateBladePoint,
     deleteBladePoint,
+    bladeHandles,
+    updateBladeHandle,
+    resetBladeHandle,
+    resetAllHandles,
     undo, redo,
     history, historyIndex,
     snapToGrid, setSnapToGrid,
@@ -550,11 +558,49 @@ export default function KaleidoscopeCanvas() {
     return null
   }, [bladePoints])
 
+  // Find nearest bezier handle endpoint; returns null if no hit
+  const findNearestHandle = useCallback((px: Vec2, canvas: HTMLCanvasElement): HandleDrag | null => {
+    const cx = canvas.width / 2
+    const cy = canvas.height / 2
+    const radius = Math.min(cx, cy) * 0.75
+    const threshold = 12
+    const handles = useTurbineStore.getState().bladeHandles
+    const pts = useTurbineStore.getState().bladePoints
+
+    for (let i = 0; i < pts.length; i++) {
+      const pt = pts[i]
+      const worldX = cx + pt.x * radius
+      const worldY = cy + pt.y * radius
+      // Effective tangent
+      const h = handles[i] ?? { x: 0, y: 0 }
+      const tang = (h.x !== 0 || h.y !== 0) ? h : crAutoTangent(pts, i)
+      // Out handle
+      const ox = worldX + tang.x * radius
+      const oy = worldY + tang.y * radius
+      if (Math.hypot(px.x - ox, px.y - oy) < threshold) return { index: i, side: 'out' }
+      // In handle (mirrored)
+      const ix = worldX - tang.x * radius
+      const iy = worldY - tang.y * radius
+      if (Math.hypot(px.x - ix, px.y - iy) < threshold) return { index: i, side: 'in' }
+    }
+    return null
+  }, [])
+
   // --- Freehand draw ---
 
   const handleDown = useCallback((px: Vec2) => {
     const canvas = canvasRef.current
     if (!canvas) return
+
+    // Check bezier handle hit first (higher priority than curve insert)
+    const nearHandle = findNearestHandle(px, canvas)
+    if (nearHandle !== null) {
+      pushUndo()
+      undoPushedRef.current = true
+      setDragHandle(nearHandle)
+      return
+    }
+
     const nearIdx = findNearestPoint(px, canvas)
 
     if (nearIdx !== null) {
@@ -591,7 +637,22 @@ export default function KaleidoscopeCanvas() {
     if (!canvas) return
     mousePxRef.current = px
 
-    if (dragIndex !== null) {
+    if (dragHandle !== null) {
+      const cx = canvas.width / 2
+      const cy = canvas.height / 2
+      const radius = Math.min(cx, cy) * 0.75
+      const pts = useTurbineStore.getState().bladePoints
+      const pt = pts[dragHandle.index]
+      if (!pt) return
+      const worldX = cx + pt.x * radius
+      const worldY = cy + pt.y * radius
+      // Compute tangent from drag position
+      let dx = (px.x - worldX) / radius
+      let dy = (px.y - worldY) / radius
+      // If dragging "in" side, flip to get the "out" tangent
+      if (dragHandle.side === 'in') { dx = -dx; dy = -dy }
+      updateBladeHandle(dragHandle.index, { x: dx, y: dy })
+    } else if (dragIndex !== null) {
       const cx = canvas.width / 2
       const cy = canvas.height / 2
       const radius = Math.min(cx, cy) * 0.75
@@ -618,6 +679,12 @@ export default function KaleidoscopeCanvas() {
   }, [dragIndex, isDrawing, pixelToNormalized, updateBladePoint, snapVal])
 
   const handleUp = useCallback(() => {
+    if (dragHandle !== null) {
+      setDragHandle(null)
+      undoPushedRef.current = false
+      return
+    }
+
     if (isDrawing && rawPointsRef.current.length >= 3) {
       const numSegs = Math.max(2, Math.min(5, Math.ceil(rawPointsRef.current.length / 15)))
       const smoothPts = fitAndResampleBezier(rawPointsRef.current, numSegs, 8)
@@ -643,18 +710,24 @@ export default function KaleidoscopeCanvas() {
     setIsDrawing(false)
     setDragIndex(null)
     undoPushedRef.current = false
-  }, [isDrawing, setBladePoints])
+  }, [isDrawing, dragHandle, setBladePoints])
 
-  // Right-click to delete point
+  // Right-click: reset handle if near one, otherwise delete point
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
     const canvas = canvasRef.current
     if (!canvas) return
     const px = getCanvasCoords(e, canvas)
     if (!px) return
+    // Check handle first
+    const nearHandle = findNearestHandle(px, canvas)
+    if (nearHandle !== null) {
+      resetBladeHandle(nearHandle.index)
+      return
+    }
     const nearIdx = findNearestPoint(px, canvas)
     if (nearIdx !== null) deleteBladePoint(nearIdx)
-  }, [getCanvasCoords, findNearestPoint, deleteBladePoint])
+  }, [getCanvasCoords, findNearestHandle, findNearestPoint, deleteBladePoint, resetBladeHandle])
 
   // Mouse handlers
   const handlePointerDown = useCallback((e: React.MouseEvent) => {
@@ -777,8 +850,10 @@ export default function KaleidoscopeCanvas() {
 
   const dragIndexRef = useRef(dragIndex)
   const isDrawingRef = useRef(isDrawing)
+  const dragHandleRef = useRef(dragHandle)
   dragIndexRef.current = dragIndex
   isDrawingRef.current = isDrawing
+  dragHandleRef.current = dragHandle
 
   // Animation render loop
   useEffect(() => {
@@ -818,7 +893,7 @@ export default function KaleidoscopeCanvas() {
       ctx.fillRect(0, 0, w, h)
 
       const store = useTurbineStore.getState()
-      const { bladePoints: pts, bladeCount: bc, curveSmoothing: cs, snapToGrid: snap } = store
+      const { bladePoints: pts, bladeHandles: bHandles, bladeCount: bc, curveSmoothing: cs, snapToGrid: snap } = store
 
       // Snap grid dots
       if (snap) {
@@ -854,7 +929,7 @@ export default function KaleidoscopeCanvas() {
       }
 
       if (pts.length >= 2) {
-        const smooth = catmullRomSpline(pts, cs)
+        const smooth = catmullRomSplineWithHandles(pts, bHandles, cs)
 
         // ── Curve hover detection ──────────────────────────────────────────
         const mpxHover = mousePxRef.current
@@ -865,7 +940,7 @@ export default function KaleidoscopeCanvas() {
         }
 
         // Update canvas cursor
-        if (dragIndexRef.current !== null) {
+        if (dragIndexRef.current !== null || dragHandleRef.current !== null) {
           canvas.style.cursor = 'grabbing'
         } else if (curveHoverRef.current !== null) {
           canvas.style.cursor = 'cell'
@@ -1001,6 +1076,73 @@ export default function KaleidoscopeCanvas() {
 
         // ── Control points with hover effects ──────────────────────────────
         const mpx = mousePxRef.current
+        const activeDragHandle = dragHandleRef.current
+
+        // Determine which point is hovered (for handle visibility)
+        let hoveredPtIdx: number | null = null
+        if (mpx) {
+          for (let i = 0; i < pts.length; i++) {
+            const wx = cx + pts[i].x * radius
+            const wy = cy + pts[i].y * radius
+            if (Math.hypot(mpx.x - wx, mpx.y - wy) < 32) { hoveredPtIdx = i; break }
+          }
+        }
+        // If dragging a handle, keep that point's handles visible
+        const handleVisibleIdx = activeDragHandle !== null ? activeDragHandle.index : hoveredPtIdx
+
+        // ── Draw bezier handle arms ────────────────────────────────────────
+        if (handleVisibleIdx !== null && handleVisibleIdx < pts.length) {
+          const pt = pts[handleVisibleIdx]
+          const worldX = cx + pt.x * radius
+          const worldY = cy + pt.y * radius
+          const h = bHandles[handleVisibleIdx] ?? { x: 0, y: 0 }
+          const tang = (h.x !== 0 || h.y !== 0) ? h : crAutoTangent(pts, handleVisibleIdx)
+          const isCustom = h.x !== 0 || h.y !== 0
+
+          const outX = worldX + tang.x * radius
+          const outY = worldY + tang.y * radius
+          const inX = worldX - tang.x * radius
+          const inY = worldY - tang.y * radius
+
+          // Arms
+          ctx.setLineDash([3, 3])
+          ctx.strokeStyle = isCustom ? 'rgba(167,139,250,0.7)' : 'rgba(100,116,139,0.45)'
+          ctx.lineWidth = 1
+          ctx.beginPath()
+          ctx.moveTo(inX, inY)
+          ctx.lineTo(outX, outY)
+          ctx.stroke()
+          ctx.setLineDash([])
+
+          // Out handle diamond
+          const isOutDragged = activeDragHandle?.index === handleVisibleIdx && activeDragHandle?.side === 'out'
+          const isInDragged  = activeDragHandle?.index === handleVisibleIdx && activeDragHandle?.side === 'in'
+          const HR = 5
+
+          for (const [hx, hy, isDragged] of [[outX, outY, isOutDragged], [inX, inY, isInDragged]] as [number, number, boolean][]) {
+            ctx.save()
+            ctx.translate(hx, hy)
+            ctx.rotate(Math.PI / 4)
+            ctx.beginPath()
+            ctx.rect(-HR, -HR, HR * 2, HR * 2)
+            ctx.fillStyle = isDragged ? '#fff' : isCustom ? 'rgba(167,139,250,0.9)' : 'rgba(148,163,184,0.7)'
+            ctx.fill()
+            ctx.strokeStyle = isDragged ? '#a78bfa' : isCustom ? '#a78bfa' : '#475569'
+            ctx.lineWidth = 1.5
+            ctx.stroke()
+            ctx.restore()
+          }
+
+          // "auto" label if using auto tangent
+          if (!isCustom) {
+            ctx.fillStyle = 'rgba(100,116,139,0.6)'
+            ctx.font = '7px system-ui'
+            ctx.textAlign = 'center'
+            ctx.fillText('auto', worldX, worldY + 18)
+            ctx.textAlign = 'left'
+          }
+        }
+
         pts.forEach((pt, i) => {
           const worldX = cx + pt.x * radius
           const worldY = cy + pt.y * radius
@@ -1214,6 +1356,13 @@ export default function KaleidoscopeCanvas() {
           className="w-7 h-7 rounded-lg flex items-center justify-center text-xs transition-all border border-border/40 bg-surface/80 backdrop-blur-sm hover:border-red-500/40 hover:text-red-400 text-text-dim"
         >
           ✕
+        </button>
+        <button
+          onClick={resetAllHandles}
+          title="Reset all bezier handles to auto"
+          className="w-7 h-7 rounded-lg flex items-center justify-center text-xs transition-all border border-border/40 bg-surface/80 backdrop-blur-sm hover:border-violet-400/40 hover:text-violet-400 text-text-dim"
+        >
+          ⟡
         </button>
 
         {/* Divider */}

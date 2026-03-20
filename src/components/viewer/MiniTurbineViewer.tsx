@@ -3,17 +3,17 @@ import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import { useTurbineStore, MATERIAL_PRESETS } from '../../stores/turbineStore'
-import { catmullRomSpline } from '../../utils/spline'
+import { catmullRomSplineWithHandles } from '../../utils/spline'
 import { resolveProfileData, halfThickNorm } from '../../utils/airfoil'
 
 function MiniTurbineMesh() {
-  const { bladePoints, bladeCount, height, twist, taper, symmetryMode, materialPreset, curveSmoothing,
+  const { bladePoints, bladeHandles, bladeCount, height, twist, taper, symmetryMode, materialPreset, curveSmoothing,
     thickness, airfoilPreset, customNacaM, customNacaP, customNacaT } = useTurbineStore()
   const matConfig = MATERIAL_PRESETS[materialPreset === 'neon-shader' ? 'teal-metal' : materialPreset]
 
   const meshData = useMemo(() => {
     if (bladePoints.length < 2) return null
-    const smooth = catmullRomSpline(bladePoints, Math.max(4, Math.floor(curveSmoothing / 2)))
+    const smooth = catmullRomSplineWithHandles(bladePoints, bladeHandles ?? [], Math.max(4, Math.floor(curveSmoothing / 2)))
     const bladeRadius = 0.6
     const heightSegments = 12
     const curveSegments = smooth.length
