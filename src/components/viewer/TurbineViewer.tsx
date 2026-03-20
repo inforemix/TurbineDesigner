@@ -30,10 +30,30 @@ const NEON_FRAG = /* glsl */`
   uniform vec3 uColorA;
   uniform vec3 uColorB;
   uniform vec3 uRimColor;
+  uniform float uPulseSpeed;
+  uniform float uPulseFreq;
+  uniform int   uPattern;
+  uniform float uFresnelPower;
+  uniform float uOpacity;
 
   varying vec3 vWorldNormal;
   varying vec3 vWorldPosition;
   varying float vHeight;
+
+  // Hex grid distance helper
+  float hexDist(vec2 p) {
+    p = abs(p);
+    return max(dot(p, normalize(vec2(1.0, 1.73))), p.x);
+  }
+
+  float hexGrid(vec2 uv) {
+    vec2 r = vec2(1.0, 1.73);
+    vec2 h = r * 0.5;
+    vec2 a = mod(uv, r) - h;
+    vec2 b = mod(uv - h, r) - h;
+    vec2 gv = dot(a,a) < dot(b,b) ? a : b;
+    return 1.0 - smoothstep(0.38, 0.42, hexDist(gv));
+  }
 
   void main() {
     vec3 viewDir = normalize(cameraPosition - vWorldPosition);
@@ -41,29 +61,69 @@ const NEON_FRAG = /* glsl */`
 
     // Fresnel rim
     float fresnel = 1.0 - abs(dot(norm, viewDir));
-    fresnel = pow(fresnel, 1.8);
+    fresnel = pow(fresnel, uFresnelPower);
 
-    // Height gradient (0 = root, 1 = tip)
+    // Height gradient
     float h = clamp(vHeight * 0.55, 0.0, 1.0);
     vec3 baseColor = mix(uColorA, uColorB, h);
 
-    // Animated energy pulse along height
-    float pulse = sin(vHeight * 8.0 - uTime * 2.5) * 0.5 + 0.5;
-    float pulse2 = sin(vHeight * 4.0 + uTime * 1.2) * 0.5 + 0.5;
-
-    // Face diffuse based on normal direction
+    // Face diffuse
     float diffuse = abs(dot(norm, normalize(vec3(1.0, 1.5, 0.8)))) * 0.5 + 0.5;
+
+    // Pattern-based pulse
+    float pattern = 0.0;
+
+    if (uPattern == 0) {
+      // Wave: animated energy rings along height
+      pattern = sin(vHeight * uPulseFreq - uTime * uPulseSpeed) * 0.5 + 0.5;
+      float p2 = sin(vHeight * uPulseFreq * 0.5 + uTime * uPulseSpeed * 0.5) * 0.5 + 0.5;
+      pattern = pattern * 0.7 + p2 * 0.3;
+
+    } else if (uPattern == 1) {
+      // Scanlines: horizontal bands travelling up
+      float band = fract(vHeight * uPulseFreq * 0.5 - uTime * uPulseSpeed * 0.12);
+      pattern = smoothstep(0.0, 0.15, band) * smoothstep(0.55, 0.35, band);
+
+    } else if (uPattern == 2) {
+      // Grid: world-space bright grid lines
+      float freq = uPulseFreq * 0.35;
+      float gx = abs(sin(vWorldPosition.x * freq * 6.28));
+      float gz = abs(sin(vWorldPosition.z * freq * 6.28));
+      float gh = abs(sin(vHeight * uPulseFreq * 3.14));
+      float lines = max(max(
+        smoothstep(0.7, 1.0, gx),
+        smoothstep(0.7, 1.0, gz)),
+        smoothstep(0.75, 1.0, gh));
+      float travel = sin(uTime * uPulseSpeed - vHeight * uPulseFreq) * 0.5 + 0.5;
+      pattern = lines * (0.5 + travel * 0.5);
+
+    } else if (uPattern == 3) {
+      // Hex: animated hexagonal lattice
+      vec2 uv = vec2(vWorldPosition.x + vWorldPosition.z, vHeight) * uPulseFreq * 0.28;
+      float hex = hexGrid(uv);
+      float travel = sin(uTime * uPulseSpeed - vHeight * uPulseFreq * 0.5) * 0.5 + 0.5;
+      pattern = hex * (0.4 + travel * 0.6);
+
+    } else {
+      // Circuit: angular traces with moving data pulses
+      float freq = uPulseFreq * 0.4;
+      float traceH = step(0.88, fract(vWorldPosition.x * freq + 0.5));
+      float traceV = step(0.88, fract(vWorldPosition.z * freq + 0.5));
+      float traces = max(traceH, traceV);
+      float pulse = fract(vHeight * uPulseFreq * 0.25 - uTime * uPulseSpeed * 0.15);
+      float dot_ = smoothstep(0.0, 0.08, pulse) * smoothstep(0.22, 0.12, pulse);
+      pattern = traces * 0.4 + dot_ * traces * 0.8 + dot_ * 0.15;
+    }
 
     // Compose
     vec3 finalColor = baseColor * diffuse * 0.35;
     finalColor += uRimColor * fresnel * 1.8;
-    finalColor += baseColor * pulse * 0.18;
-    finalColor += uRimColor * pulse2 * fresnel * 0.4;
+    finalColor += baseColor * pattern * 0.25;
+    finalColor += uRimColor * pattern * fresnel * 0.5;
 
-    // Clamp brightness
-    finalColor = min(finalColor, vec3(1.5));
+    finalColor = min(finalColor, vec3(1.6));
 
-    float alpha = 0.82 + fresnel * 0.18;
+    float alpha = uOpacity * (0.75 + fresnel * 0.25);
     gl_FragColor = vec4(finalColor, alpha);
   }
 `
@@ -87,6 +147,7 @@ function TurbineMesh() {
     windSpeed, isSpinning, symmetryMode, materialPreset, isTransitioning, transitionProgress, curveSmoothing,
     chordCurve, twistCurve, bladeSections,
     airfoilPreset, customNacaM, customNacaP, customNacaT,
+    neonConfig,
   } = useTurbineStore()
 
   const matConfig = MATERIAL_PRESETS[materialPreset === 'neon-shader' ? 'teal-metal' : materialPreset]
@@ -211,12 +272,17 @@ function TurbineMesh() {
   }, [bladePoints, bladeCount, height, twist, taper, thickness, symmetryMode, curveSmoothing,
       chordCurve, twistCurve, bladeSections, airfoilPreset, customNacaM, customNacaP, customNacaT])
 
-  // Neon shader material uniforms
+  // Neon shader material uniforms (initialized once, updated live in useFrame)
   const neonUniforms = useMemo(() => ({
-    uTime: { value: 0 },
-    uColorA: { value: new THREE.Color('#0d5c63') },
-    uColorB: { value: new THREE.Color('#7c3aed') },
-    uRimColor: { value: new THREE.Color('#2dd4bf') },
+    uTime:         { value: 0 },
+    uColorA:       { value: new THREE.Color('#0d5c63') },
+    uColorB:       { value: new THREE.Color('#7c3aed') },
+    uRimColor:     { value: new THREE.Color('#2dd4bf') },
+    uPulseSpeed:   { value: 2.5 },
+    uPulseFreq:    { value: 8.0 },
+    uPattern:      { value: 0 },
+    uFresnelPower: { value: 1.8 },
+    uOpacity:      { value: 0.85 },
   }), [])
 
   // Materials
@@ -266,10 +332,19 @@ function TurbineMesh() {
   useFrame((_, delta) => {
     if (!groupRef.current) return
 
-    // Update neon shader time
+    // Update neon shader uniforms live
     if (isNeonShader) {
       shaderTimeRef.current += delta
+      const nc = useTurbineStore.getState().neonConfig
       neonUniforms.uTime.value = shaderTimeRef.current
+      neonUniforms.uColorA.value.set(nc.colorA)
+      neonUniforms.uColorB.value.set(nc.colorB)
+      neonUniforms.uRimColor.value.set(nc.rimColor)
+      neonUniforms.uPulseSpeed.value = nc.pulseSpeed
+      neonUniforms.uPulseFreq.value = nc.pulseFreq
+      neonUniforms.uPattern.value = nc.pattern
+      neonUniforms.uFresnelPower.value = nc.fresnelPower
+      neonUniforms.uOpacity.value = nc.opacity
     }
 
     // Staggered reveal animation

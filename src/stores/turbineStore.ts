@@ -12,7 +12,7 @@ export type SymmetryMode = 'pinwheel' | 'snowflake' | 'helix' | 'freeform'
 export type AppMode = 'draw' | 'side' | 'view'
 export type BloomTier = 'dormant' | 'seedling' | 'flourishing' | 'radiant'
 
-export type MaterialPreset = 'teal-metal' | 'brushed-steel' | 'carbon-fiber' | 'copper-patina' | 'frosted-glass' | 'matte-white' | 'neon-shader'
+export type MaterialPreset = 'teal-metal' | 'brushed-steel' | 'copper-patina' | 'frosted-glass' | 'matte-white' | 'neon-shader'
 
 export interface MaterialConfig {
   label: string
@@ -84,13 +84,37 @@ function persistDesigns(designs: SavedDesign[]) {
 }
 
 export const MATERIAL_PRESETS: Record<MaterialPreset, MaterialConfig> = {
-  'teal-metal': { label: 'Teal Metal', color: '#2dd4bf', metalness: 0.55, roughness: 0.35, opacity: 1, transparent: false, emissiveIntensity: 0 },
-  'brushed-steel': { label: 'Brushed Steel', color: '#b0b8c8', metalness: 0.85, roughness: 0.25, opacity: 1, transparent: false, emissiveIntensity: 0 },
-  'carbon-fiber': { label: 'Carbon Fiber', color: '#2a2a2a', metalness: 0.3, roughness: 0.6, opacity: 1, transparent: false, emissiveIntensity: 0 },
-  'copper-patina': { label: 'Copper Patina', color: '#6db89e', metalness: 0.7, roughness: 0.45, opacity: 1, transparent: false, emissiveIntensity: 0.05 },
-  'frosted-glass': { label: 'Frosted Glass', color: '#c8e6f0', metalness: 0.1, roughness: 0.15, opacity: 0.7, transparent: true, emissiveIntensity: 0.1 },
-  'matte-white': { label: 'Matte White', color: '#f0f0f0', metalness: 0.05, roughness: 0.9, opacity: 1, transparent: false, emissiveIntensity: 0 },
-  'neon-shader': { label: 'Neon Shader', color: '#2dd4bf', metalness: 0, roughness: 0, opacity: 1, transparent: false, emissiveIntensity: 0 },
+  'teal-metal':    { label: 'Teal Metal',    color: '#2dd4bf', metalness: 0.55, roughness: 0.35, opacity: 1,   transparent: false, emissiveIntensity: 0 },
+  'brushed-steel': { label: 'Brushed Steel', color: '#b0b8c8', metalness: 0.85, roughness: 0.25, opacity: 1,   transparent: false, emissiveIntensity: 0 },
+  'copper-patina': { label: 'Copper Patina', color: '#6db89e', metalness: 0.7,  roughness: 0.45, opacity: 1,   transparent: false, emissiveIntensity: 0.05 },
+  'frosted-glass': { label: 'Frosted Glass', color: '#c8e6f0', metalness: 0.1,  roughness: 0.15, opacity: 0.7, transparent: true,  emissiveIntensity: 0.1 },
+  'matte-white':   { label: 'Matte White',   color: '#f0f0f0', metalness: 0.05, roughness: 0.9,  opacity: 1,   transparent: false, emissiveIntensity: 0 },
+  'neon-shader':   { label: 'Neon Shader',   color: '#2dd4bf', metalness: 0,    roughness: 0,    opacity: 1,   transparent: false, emissiveIntensity: 0 },
+}
+
+// ── Neon Shader configuration ──────────────────────────────────────────────────
+export type NeonPattern = 0 | 1 | 2 | 3 | 4  // wave | scanlines | grid | hex | circuit
+
+export interface NeonConfig {
+  colorA: string        // root/base color
+  colorB: string        // tip/gradient color
+  rimColor: string      // rim glow color
+  pulseSpeed: number    // animation speed
+  pulseFreq: number     // wave frequency along height
+  pattern: NeonPattern  // 0=wave 1=scanlines 2=grid 3=hex 4=circuit
+  fresnelPower: number  // rim glow sharpness
+  opacity: number       // overall opacity
+}
+
+export const DEFAULT_NEON_CONFIG: NeonConfig = {
+  colorA: '#0d5c63',
+  colorB: '#7c3aed',
+  rimColor: '#2dd4bf',
+  pulseSpeed: 2.5,
+  pulseFreq: 8,
+  pattern: 0,
+  fresnelPower: 1.8,
+  opacity: 0.85,
 }
 
 // Preset blade curves
@@ -248,6 +272,8 @@ interface TurbineState {
   // Material
   materialPreset: MaterialPreset
   setMaterialPreset: (preset: MaterialPreset) => void
+  neonConfig: NeonConfig
+  setNeonConfig: (partial: Partial<NeonConfig>) => void
 
   // Wind simulation
   windSpeed: number
@@ -483,6 +509,8 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
 
   materialPreset: 'teal-metal' as MaterialPreset,
   setMaterialPreset: (preset) => set({ materialPreset: preset }),
+  neonConfig: { ...DEFAULT_NEON_CONFIG },
+  setNeonConfig: (partial) => set(s => ({ neonConfig: { ...s.neonConfig, ...partial } })),
 
   windSpeed: 6,
   setWindSpeed: (s) => { set({ windSpeed: s }); get().updatePhysics() },
@@ -584,7 +612,7 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
       taper: design.taper,
       thickness: design.thickness,
       symmetryMode: design.symmetryMode,
-      materialPreset: design.materialPreset,
+      materialPreset: (design.materialPreset === 'carbon-fiber' ? 'teal-metal' : design.materialPreset) as MaterialPreset,
       chordCurve: design.chordCurve.map(p => ({ ...p })),
       twistCurve: design.twistCurve.map(p => ({ ...p })),
       airfoilPreset: design.airfoilPreset ?? 'symmetric',
