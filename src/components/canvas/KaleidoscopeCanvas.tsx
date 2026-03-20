@@ -1,12 +1,130 @@
 import { useRef, useEffect, useCallback, useState } from 'react'
 import { useTurbineStore, type Vec2 } from '../../stores/turbineStore'
-import { catmullRomSpline, mirrorPoints, simplifyPoints } from '../../utils/spline'
+import { catmullRomSpline, mirrorPoints } from '../../utils/spline'
+import { Bezier } from 'bezier-js'
 
-const simplifyPath = simplifyPoints
 import { usePuzzleStore } from '../../stores/puzzleStore'
 import MiniTurbineViewer from '../viewer/MiniTurbineViewer'
 
 const MAX_POINTS = 20
+
+/* ------------------------------------------------------------------ */
+/*  Bezier fitting helpers                                             */
+/* ------------------------------------------------------------------ */
+
+/** Fit cubic Bezier segments to a polyline, then resample evenly */
+function fitAndResampleBezier(raw: Vec2[], numSegments: number, samplesPerSeg: number): Vec2[] {
+  if (raw.length < 3) return raw
+
+  // Sort by x to ensure left-to-right
+  const sorted = [...raw].sort((a, b) => a.x - b.x)
+
+  // Split the sorted points into sub-ranges for each Bezier segment
+  const step = (sorted.length - 1) / numSegments
+  const result: Vec2[] = []
+
+  for (let s = 0; s < numSegments; s++) {
+    const i0 = Math.round(s * step)
+    const i3 = Math.round((s + 1) * step)
+    const subPts = sorted.slice(i0, i3 + 1)
+    if (subPts.length < 2) continue
+
+    const p0 = subPts[0]
+    const p3 = subPts[subPts.length - 1]
+
+    // Initial control points at 1/3 and 2/3
+    const i1 = Math.min(subPts.length - 1, Math.round(subPts.length / 3))
+    const i2 = Math.min(subPts.length - 1, Math.round((2 * subPts.length) / 3))
+
+    const cp1 = {
+      x: p0.x + (subPts[i1].x - p0.x) * 1.5,
+      y: p0.y + (subPts[i1].y - p0.y) * 1.5,
+    }
+    const cp2 = {
+      x: p3.x + (subPts[i2].x - p3.x) * 1.5,
+      y: p3.y + (subPts[i2].y - p3.y) * 1.5,
+    }
+
+    // Iterative refinement (minimise error between Bezier and original points)
+    for (let iter = 0; iter < 6; iter++) {
+      const bz = new Bezier(p0.x, p0.y, cp1.x, cp1.y, cp2.x, cp2.y, p3.x, p3.y)
+      const lut = bz.getLUT(subPts.length - 1)
+
+      let errCp1X = 0, errCp1Y = 0, errCp2X = 0, errCp2Y = 0
+      for (let j = 0; j < subPts.length; j++) {
+        const t = j / (subPts.length - 1)
+        const approx = lut[j]
+        if (!approx) continue
+        const dx = subPts[j].x - approx.x
+        const dy = subPts[j].y - approx.y
+        const w1 = 3 * t * (1 - t) * (1 - t)
+        const w2 = 3 * t * t * (1 - t)
+        errCp1X += dx * w1
+        errCp1Y += dy * w1
+        errCp2X += dx * w2
+        errCp2Y += dy * w2
+      }
+
+      const scale = 1.5 / subPts.length
+      cp1.x += errCp1X * scale * 4
+      cp1.y += errCp1Y * scale * 4
+      cp2.x += errCp2X * scale * 4
+      cp2.y += errCp2Y * scale * 4
+    }
+
+    // Sample the fitted Bezier uniformly
+    const bz = new Bezier(p0.x, p0.y, cp1.x, cp1.y, cp2.x, cp2.y, p3.x, p3.y)
+    const sampled = bz.getLUT(samplesPerSeg)
+
+    // Skip first point of subsequent segments to avoid duplicates
+    const startIdx = result.length > 0 ? 1 : 0
+    for (let k = startIdx; k < sampled.length; k++) {
+      result.push({ x: sampled[k].x, y: sampled[k].y })
+    }
+  }
+
+  return result
+}
+
+/** Simplify dense raw input into fewer key points using RDP */
+function simplifyRDP(points: Vec2[], epsilon: number): Vec2[] {
+  if (points.length <= 2) return [...points]
+  const first = points[0]
+  const last = points[points.length - 1]
+  let maxDist = 0
+  let maxIdx = 0
+  const dx = last.x - first.x
+  const dy = last.y - first.y
+  const lineLen = Math.sqrt(dx * dx + dy * dy)
+
+  for (let i = 1; i < points.length - 1; i++) {
+    let dist: number
+    if (lineLen === 0) {
+      const ex = points[i].x - first.x
+      const ey = points[i].y - first.y
+      dist = Math.sqrt(ex * ex + ey * ey)
+    } else {
+      dist = Math.abs(
+        dy * points[i].x - dx * points[i].y + last.x * first.y - last.y * first.x,
+      ) / lineLen
+    }
+    if (dist > maxDist) {
+      maxDist = dist
+      maxIdx = i
+    }
+  }
+
+  if (maxDist > epsilon) {
+    const left = simplifyRDP(points.slice(0, maxIdx + 1), epsilon)
+    const right = simplifyRDP(points.slice(maxIdx), epsilon)
+    return [...left.slice(0, -1), ...right]
+  }
+  return [first, last]
+}
+
+/* ------------------------------------------------------------------ */
+/*  Component                                                          */
+/* ------------------------------------------------------------------ */
 
 export default function KaleidoscopeCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -15,15 +133,16 @@ export default function KaleidoscopeCanvas() {
   const animFrameRef = useRef<number>(0)
   const timeRef = useRef(0)
   const [showMiniPreview, setShowMiniPreview] = useState(false)
-  // Buffer raw drawn points before simplification
+  // Buffer raw drawn points before Bezier fitting
   const rawPointsRef = useRef<Vec2[]>([])
+  // Raw pixel points for live preview during drawing
+  const rawPixelPreviewRef = useRef<Vec2[]>([])
   // Track whether we pushed undo for this gesture
   const undoPushedRef = useRef(false)
 
   const {
     bladePoints,
     setBladePoints,
-    addBladePoint,
     updateBladePoint,
     deleteBladePoint,
     undo, redo,
@@ -33,7 +152,7 @@ export default function KaleidoscopeCanvas() {
     pushUndo,
   } = useTurbineStore()
 
-  usePuzzleStore() // subscribe for potential future challenge target overlay
+  usePuzzleStore()
 
   const snapVal = useCallback((v: number) => {
     return snapToGrid ? Math.round(v / 0.05) * 0.05 : v
@@ -103,30 +222,32 @@ export default function KaleidoscopeCanvas() {
     return null
   }, [bladePoints])
 
+  // --- Freehand draw: buffer ALL raw points, don't add to store until release ---
+
   const handleDown = useCallback((px: Vec2) => {
     const canvas = canvasRef.current
     if (!canvas) return
     const nearIdx = findNearestPoint(px, canvas)
 
     if (nearIdx !== null) {
+      // Drag existing point
       pushUndo()
       undoPushedRef.current = true
       setDragIndex(nearIdx)
     } else {
-      if (bladePoints.length >= MAX_POINTS) return
+      // Start freehand drawing
       pushUndo()
       undoPushedRef.current = true
       setIsDrawing(true)
-      rawPointsRef.current = []
       const norm = pixelToNormalized(px, canvas)
-      const newPoint: Vec2 = {
+      const pt: Vec2 = {
         x: Math.max(0, Math.min(1, norm.x)),
         y: Math.max(0, Math.min(0.5, Math.abs(norm.y))),
       }
-      rawPointsRef.current.push(newPoint)
-      addBladePoint(newPoint)
+      rawPointsRef.current = [pt]
+      rawPixelPreviewRef.current = [px]
     }
-  }, [findNearestPoint, pixelToNormalized, addBladePoint, pushUndo])
+  }, [findNearestPoint, pixelToNormalized, pushUndo])
 
   const handleMove = useCallback((px: Vec2) => {
     const canvas = canvasRef.current
@@ -142,44 +263,55 @@ export default function KaleidoscopeCanvas() {
       }
       updateBladePoint(dragIndex, updated)
     } else if (isDrawing) {
-      if (bladePoints.length >= MAX_POINTS) return
+      // Buffer raw points — no store mutation yet
       const norm = pixelToNormalized(px, canvas)
-      const newPoint: Vec2 = {
+      const pt: Vec2 = {
         x: Math.max(0, Math.min(1, norm.x)),
         y: Math.max(0, Math.min(0.5, Math.abs(norm.y))),
       }
-      // Collect raw points with low threshold for smooth capture
+      // Only add if moved enough (raw capture, low threshold for smooth curves)
       const last = rawPointsRef.current[rawPointsRef.current.length - 1]
       if (last) {
-        const dist = Math.sqrt((newPoint.x - last.x) ** 2 + (newPoint.y - last.y) ** 2)
-        if (dist > 0.06) addBladePoint(newPoint)
+        const dist = Math.sqrt((pt.x - last.x) ** 2 + (pt.y - last.y) ** 2)
+        if (dist > 0.005) {
+          rawPointsRef.current.push(pt)
+          rawPixelPreviewRef.current.push(px)
+        }
       }
     }
-  }, [dragIndex, isDrawing, pixelToNormalized, updateBladePoint, addBladePoint, snapVal])
+  }, [dragIndex, isDrawing, pixelToNormalized, updateBladePoint, snapVal])
 
   const handleUp = useCallback(() => {
-    if (isDrawing && rawPointsRef.current.length > 2) {
-      // Simplify the drawn points using Ramer-Douglas-Peucker + sort
-      const existing = useTurbineStore.getState().bladePoints
-      // Identify the points that were drawn in this stroke (they're the last N points)
-      const strokeCount = rawPointsRef.current.length
-      const preExisting = existing.slice(0, existing.length - strokeCount)
-      const simplified = simplifyPath(rawPointsRef.current, 0.012)
-      const merged = [...preExisting, ...simplified].sort((a, b) => a.x - b.x)
-      setBladePoints(merged)
-    } else {
-      const sorted = [...useTurbineStore.getState().bladePoints].sort((a, b) => a.x - b.x)
+    if (isDrawing && rawPointsRef.current.length >= 3) {
+      // Fit Bezier curves to the raw freehand points and resample smoothly
+      const numSegs = Math.max(2, Math.min(5, Math.ceil(rawPointsRef.current.length / 15)))
+      const smoothPts = fitAndResampleBezier(rawPointsRef.current, numSegs, 8)
+
+      // Simplify to get nice control points (≤ MAX_POINTS)
+      let simplified = simplifyRDP(smoothPts, 0.008)
+      if (simplified.length > MAX_POINTS) {
+        simplified = simplifyRDP(smoothPts, 0.02)
+      }
+      if (simplified.length > MAX_POINTS) {
+        simplified = simplifyRDP(smoothPts, 0.04)
+      }
+
+      // Merge with any existing points (replace existing with newly drawn)
+      simplified.sort((a, b) => a.x - b.x)
+      setBladePoints(simplified)
+    } else if (isDrawing && rawPointsRef.current.length > 0) {
+      // Just a click — add single point
+      const pts = [...useTurbineStore.getState().bladePoints, ...rawPointsRef.current]
+      const sorted = pts.sort((a, b) => a.x - b.x)
       setBladePoints(sorted)
     }
+
     rawPointsRef.current = []
+    rawPixelPreviewRef.current = []
     setIsDrawing(false)
     setDragIndex(null)
-    const currentPts = useTurbineStore.getState().bladePoints
-    const sorted = [...currentPts].sort((a, b) => a.x - b.x)
-    const simplified = simplifyPoints(sorted, 0.04)
-    setBladePoints(simplified)
     undoPushedRef.current = false
-  }, [setBladePoints])
+  }, [isDrawing, setBladePoints])
 
   // Right-click to delete point
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
@@ -224,18 +356,16 @@ export default function KaleidoscopeCanvas() {
         undoPushedRef.current = true
         setDragIndex(nearIdx)
       } else {
-        if (useTurbineStore.getState().bladePoints.length >= MAX_POINTS) return
         pushUndo()
         undoPushedRef.current = true
         setIsDrawing(true)
-        rawPointsRef.current = []
         const norm = pixelToNormalized(px, canvas)
         const pt: Vec2 = {
           x: Math.max(0, Math.min(1, norm.x)),
           y: Math.max(0, Math.min(0.5, Math.abs(norm.y))),
         }
-        rawPointsRef.current.push(pt)
-        addBladePoint(pt)
+        rawPointsRef.current = [pt]
+        rawPixelPreviewRef.current = [px]
       }
     }
 
@@ -257,40 +387,41 @@ export default function KaleidoscopeCanvas() {
           y: Math.max(0, Math.min(0.5, Math.abs(sv((px.y - cy) / radius)))),
         })
       } else if (currentIsDrawing) {
-        const pts = useTurbineStore.getState().bladePoints
-        if (pts.length >= MAX_POINTS) return
         const norm = pixelToNormalized(px, canvas)
-        const newPoint: Vec2 = {
+        const pt: Vec2 = {
           x: Math.max(0, Math.min(1, norm.x)),
           y: Math.max(0, Math.min(0.5, Math.abs(norm.y))),
         }
-        const last = pts[pts.length - 1]
+        const last = rawPointsRef.current[rawPointsRef.current.length - 1]
         if (last) {
-          const dist = Math.sqrt((newPoint.x - last.x) ** 2 + (newPoint.y - last.y) ** 2)
-          if (dist > 0.06) addBladePoint(newPoint)
+          const dist = Math.sqrt((pt.x - last.x) ** 2 + (pt.y - last.y) ** 2)
+          if (dist > 0.005) {
+            rawPointsRef.current.push(pt)
+            rawPixelPreviewRef.current.push(px)
+          }
         }
       }
     }
 
     const onTouchEnd = (e: TouchEvent) => {
       e.preventDefault()
-      if (isDrawingRef.current && rawPointsRef.current.length > 2) {
-        const existing = useTurbineStore.getState().bladePoints
-        const strokeCount = rawPointsRef.current.length
-        const preExisting = existing.slice(0, existing.length - strokeCount)
-        const simplified = simplifyPath(rawPointsRef.current, 0.012)
-        const merged = [...preExisting, ...simplified].sort((a, b) => a.x - b.x)
-        setBladePoints(merged)
-      } else {
-        const sorted = [...useTurbineStore.getState().bladePoints].sort((a, b) => a.x - b.x)
-        setBladePoints(sorted)
+      if (isDrawingRef.current && rawPointsRef.current.length >= 3) {
+        const numSegs = Math.max(2, Math.min(5, Math.ceil(rawPointsRef.current.length / 15)))
+        const smoothPts = fitAndResampleBezier(rawPointsRef.current, numSegs, 8)
+        let simplified = simplifyRDP(smoothPts, 0.008)
+        if (simplified.length > MAX_POINTS) simplified = simplifyRDP(smoothPts, 0.02)
+        if (simplified.length > MAX_POINTS) simplified = simplifyRDP(smoothPts, 0.04)
+        simplified.sort((a, b) => a.x - b.x)
+        setBladePoints(simplified)
+      } else if (isDrawingRef.current && rawPointsRef.current.length > 0) {
+        const pts = [...useTurbineStore.getState().bladePoints, ...rawPointsRef.current]
+        setBladePoints(pts.sort((a, b) => a.x - b.x))
       }
+
       rawPointsRef.current = []
+      rawPixelPreviewRef.current = []
       setIsDrawing(false)
       setDragIndex(null)
-      const sorted = [...useTurbineStore.getState().bladePoints].sort((a, b) => a.x - b.x)
-      const simplified = simplifyPoints(sorted, 0.04)
-      setBladePoints(simplified)
       undoPushedRef.current = false
     }
 
@@ -305,19 +436,7 @@ export default function KaleidoscopeCanvas() {
       canvas.removeEventListener('touchend', onTouchEnd)
       canvas.removeEventListener('touchcancel', onTouchEnd)
     }
-  }, [getCanvasCoords, findNearestPoint, pixelToNormalized, addBladePoint, updateBladePoint, setBladePoints, pushUndo])
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo() }
-        if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) { e.preventDefault(); redo() }
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [undo, redo])
+  }, [getCanvasCoords, findNearestPoint, pixelToNormalized, updateBladePoint, setBladePoints, pushUndo])
 
   const dragIndexRef = useRef(dragIndex)
   const isDrawingRef = useRef(isDrawing)
@@ -397,7 +516,7 @@ export default function KaleidoscopeCanvas() {
         ctx.stroke()
       }
 
-      // Draw mirrored blades
+      // Draw mirrored blades (smooth spline, NO zig-zag)
       if (pts.length >= 2) {
         const smooth = catmullRomSpline(pts, cs)
         const mirrored = mirrorPoints(smooth, bc, cx, cy, radius)
@@ -407,9 +526,13 @@ export default function KaleidoscopeCanvas() {
           if (blade.length < 2) return
           ctx.beginPath()
           ctx.moveTo(blade[0].x, blade[0].y)
-          blade.forEach((p) => ctx.lineTo(p.x, p.y))
+          for (let i = 1; i < blade.length; i++) {
+            ctx.lineTo(blade[i].x, blade[i].y)
+          }
           ctx.strokeStyle = 'rgba(45, 212, 191, 0.15)'
           ctx.lineWidth = 6
+          ctx.lineCap = 'round'
+          ctx.lineJoin = 'round'
           ctx.stroke()
         })
 
@@ -418,42 +541,53 @@ export default function KaleidoscopeCanvas() {
           if (blade.length < 2) return
           ctx.beginPath()
           ctx.moveTo(blade[0].x, blade[0].y)
-          blade.forEach((p) => ctx.lineTo(p.x, p.y))
+          for (let i = 1; i < blade.length; i++) {
+            ctx.lineTo(blade[i].x, blade[i].y)
+          }
           const tier = store.bloomTier
           const alpha = tier === 'radiant' ? 0.95 : tier === 'flourishing' ? 0.85 : 0.7
           const hue = 174 + idx * (30 / bc)
           ctx.strokeStyle = `hsla(${hue}, 70%, 55%, ${alpha})`
           ctx.lineWidth = 2.5
+          ctx.lineCap = 'round'
+          ctx.lineJoin = 'round'
           ctx.stroke()
         })
 
-        // Control points
+        // Control points — just dots, NO dashed connecting lines
         pts.forEach((pt, i) => {
           const worldX = cx + pt.x * radius
           const worldY = cy + pt.y * radius
 
+          // Outer glow
           ctx.beginPath()
           ctx.arc(worldX, worldY, 8, 0, Math.PI * 2)
           ctx.fillStyle = 'rgba(45, 212, 191, 0.2)'
           ctx.fill()
 
+          // Inner dot
           ctx.beginPath()
           ctx.arc(worldX, worldY, 4, 0, Math.PI * 2)
           ctx.fillStyle = i === 0 ? '#fbbf24' : '#2dd4bf'
           ctx.fill()
-
-          if (i > 0) {
-            const prev = pts[i - 1]
-            ctx.beginPath()
-            ctx.moveTo(cx + prev.x * radius, cy + prev.y * radius)
-            ctx.lineTo(worldX, worldY)
-            ctx.strokeStyle = 'rgba(45, 212, 191, 0.3)'
-            ctx.lineWidth = 1
-            ctx.setLineDash([4, 4])
-            ctx.stroke()
-            ctx.setLineDash([])
-          }
         })
+      }
+
+      // Live preview of freehand drawing in progress (smooth line)
+      const rawPreview = rawPixelPreviewRef.current
+      if (rawPreview.length >= 2) {
+        ctx.beginPath()
+        ctx.moveTo(rawPreview[0].x, rawPreview[0].y)
+        for (let i = 1; i < rawPreview.length; i++) {
+          ctx.lineTo(rawPreview[i].x, rawPreview[i].y)
+        }
+        ctx.strokeStyle = 'rgba(251, 191, 36, 0.6)'
+        ctx.lineWidth = 2
+        ctx.lineCap = 'round'
+        ctx.lineJoin = 'round'
+        ctx.setLineDash([4, 4])
+        ctx.stroke()
+        ctx.setLineDash([])
       }
 
       // Center hub
