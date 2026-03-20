@@ -461,6 +461,9 @@ export default function KaleidoscopeCanvas() {
   const [isDrawing, setIsDrawing] = useState(false)
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [dragHandle, setDragHandle] = useState<HandleDrag | null>(null)
+  const [selectedPointIdx, setSelectedPointIdx] = useState<number | null>(null)
+  const selectedPointIdxRef = useRef<number | null>(null)
+  selectedPointIdxRef.current = selectedPointIdx
   const animFrameRef = useRef<number>(0)
   const timeRef = useRef(0)
   const [showMiniPreview, setShowMiniPreview] = useState(false)
@@ -494,7 +497,7 @@ export default function KaleidoscopeCanvas() {
     return snapToGrid ? Math.round(v / 0.05) * 0.05 : v
   }, [snapToGrid])
 
-  // Keyboard shortcuts for undo/redo
+  // Keyboard shortcuts for undo/redo + Escape to deselect
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const isMeta = e.metaKey || e.ctrlKey
@@ -507,6 +510,8 @@ export default function KaleidoscopeCanvas() {
       } else if (isMeta && e.key === 'y') {
         e.preventDefault()
         redo()
+      } else if (e.key === 'Escape') {
+        setSelectedPointIdx(null)
       }
     }
     window.addEventListener('keydown', onKeyDown)
@@ -592,33 +597,37 @@ export default function KaleidoscopeCanvas() {
     const canvas = canvasRef.current
     if (!canvas) return
 
-    // Check bezier handle hit first (higher priority than curve insert)
+    // Check bezier handle hit first (higher priority — only when a point is selected)
     const nearHandle = findNearestHandle(px, canvas)
     if (nearHandle !== null) {
       pushUndo()
       undoPushedRef.current = true
       setDragHandle(nearHandle)
+      setSelectedPointIdx(nearHandle.index)
       return
     }
 
     const nearIdx = findNearestPoint(px, canvas)
 
     if (nearIdx !== null) {
-      // Drag existing point
+      // Click on existing point: select it and start drag
       pushUndo()
       undoPushedRef.current = true
+      setSelectedPointIdx(nearIdx)
       setDragIndex(nearIdx)
     } else if (curveHoverRef.current !== null) {
-      // Click on curve → insert new point and immediately drag it
+      // Click on curve → insert new point, select it, and immediately drag it
       pushUndo()
       undoPushedRef.current = true
       const { normPt, insertIdx } = curveHoverRef.current
       const newPts = [...useTurbineStore.getState().bladePoints]
       newPts.splice(insertIdx, 0, normPt)
       setBladePoints(newPts)
+      setSelectedPointIdx(insertIdx)
       setDragIndex(insertIdx)
     } else {
-      // Freehand draw
+      // Click on empty space: deselect + freehand draw
+      setSelectedPointIdx(null)
       pushUndo()
       undoPushedRef.current = true
       setIsDrawing(true)
@@ -630,7 +639,7 @@ export default function KaleidoscopeCanvas() {
       rawPointsRef.current = [pt]
       rawPixelPreviewRef.current = [px]
     }
-  }, [findNearestPoint, pixelToNormalized, pushUndo, setBladePoints])
+  }, [findNearestPoint, findNearestHandle, pixelToNormalized, pushUndo, setBladePoints])
 
   const handleMove = useCallback((px: Vec2) => {
     const canvas = canvasRef.current
@@ -1078,7 +1087,7 @@ export default function KaleidoscopeCanvas() {
         const mpx = mousePxRef.current
         const activeDragHandle = dragHandleRef.current
 
-        // Determine which point is hovered (for handle visibility)
+        // Determine which point is hovered (transient hover highlight)
         let hoveredPtIdx: number | null = null
         if (mpx) {
           for (let i = 0; i < pts.length; i++) {
@@ -1087,8 +1096,12 @@ export default function KaleidoscopeCanvas() {
             if (Math.hypot(mpx.x - wx, mpx.y - wy) < 32) { hoveredPtIdx = i; break }
           }
         }
-        // If dragging a handle, keep that point's handles visible
-        const handleVisibleIdx = activeDragHandle !== null ? activeDragHandle.index : hoveredPtIdx
+        // Persistent selection takes priority; hover is secondary; dragging a handle keeps it visible
+        const handleVisibleIdx = activeDragHandle !== null
+          ? activeDragHandle.index
+          : selectedPointIdxRef.current !== null
+            ? selectedPointIdxRef.current
+            : hoveredPtIdx
 
         // ── Draw bezier handle arms ────────────────────────────────────────
         if (handleVisibleIdx !== null && handleVisibleIdx < pts.length) {
@@ -1175,12 +1188,15 @@ export default function KaleidoscopeCanvas() {
           ctx.fillStyle = i === 0 ? '#fbbf24' : '#2dd4bf'
           ctx.fill()
 
-          // Crosshair ring on hover
-          if (isHovered || isDragged) {
+          // Selection ring (persistent) + hover ring
+          const isSelected = selectedPointIdxRef.current === i
+          if (isHovered || isDragged || isSelected) {
             ctx.beginPath()
             ctx.arc(worldX, worldY, dotR + 3, 0, Math.PI * 2)
-            ctx.strokeStyle = i === 0 ? 'rgba(251,191,36,0.5)' : 'rgba(45,212,191,0.5)'
-            ctx.lineWidth = 1
+            ctx.strokeStyle = isSelected
+              ? (i === 0 ? 'rgba(251,191,36,0.8)' : 'rgba(167,139,250,0.8)')
+              : (i === 0 ? 'rgba(251,191,36,0.5)' : 'rgba(45,212,191,0.5)')
+            ctx.lineWidth = isSelected ? 1.5 : 1
             ctx.stroke()
           }
 
