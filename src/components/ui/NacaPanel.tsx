@@ -63,10 +63,27 @@ function AirfoilPreview({ code }: { code: string }) {
 }
 
 export default function NacaPanel() {
-  const { bladeCount } = useTurbineStore()
-  const [selected, setSelected] = useState('0012')
+  const { bladeCount, customNacaM, customNacaP, customNacaT, setCustomNaca, setAirfoilPreset } = useTurbineStore()
   const [customCode, setCustomCode] = useState('2412')
   const [editingCustom, setEditingCustom] = useState(false)
+
+  // Derive selected code from store NACA params (find matching preset or show custom)
+  const selected = useMemo(() => {
+    const match = AIRFOIL_PRESETS.find(
+      p => p.m === customNacaM && p.p === customNacaP && p.t === customNacaT
+    )
+    if (match) return match.code
+    const m4 = Math.round(customNacaM * 100)
+    const p4 = Math.round(customNacaP * 10)
+    const t4 = Math.round(customNacaT * 100)
+    return `${m4}${p4}${String(t4).padStart(2, '0')}`
+  }, [customNacaM, customNacaP, customNacaT])
+
+  const applyCode = (code: string) => {
+    const { m, p, t } = parseNACA4(code)
+    setCustomNaca(m, p, t)
+    setAirfoilPreset('custom')
+  }
 
   const solidity = useMemo(() => {
     const chord = 0.15 // normalized estimate
@@ -93,7 +110,7 @@ export default function NacaPanel() {
         {AIRFOIL_PRESETS.map((preset) => (
           <button
             key={preset.code}
-            onClick={() => setSelected(preset.code)}
+            onClick={() => applyCode(preset.code)}
             className={`text-left px-3 py-2 rounded-lg text-[10px] font-semibold transition-all flex items-center justify-between border ${
               selected === preset.code
                 ? 'bg-teal/30 text-teal border-teal/40 shadow-sm'
@@ -123,7 +140,7 @@ export default function NacaPanel() {
             />
             <Button
               size="sm"
-              onClick={() => { setSelected(customCode.padStart(4, '0')); setEditingCustom(false) }}
+              onClick={() => { applyCode(customCode.padStart(4, '0')); setEditingCustom(false) }}
               className="h-9 px-3 text-[10px] bg-teal/30 text-teal border border-teal/40 hover:bg-teal/40 font-semibold"
             >
               ✓

@@ -100,6 +100,65 @@ export function catmullRomSpline(
 }
 
 /**
+ * Compute auto Catmull-Rom tangent at index i (for use in handle display)
+ */
+export function crAutoTangent(points: Vec2[], i: number): Vec2 {
+  const n = points.length
+  const p0 = points[Math.max(0, i - 1)]
+  const p2 = points[Math.min(n - 1, i + 1)]
+  return { x: (p2.x - p0.x) * 0.5, y: (p2.y - p0.y) * 0.5 }
+}
+
+/**
+ * Catmull-Rom spline with optional per-point bezier handle overrides.
+ * handles[i] = {0,0} means use auto Catmull-Rom tangent at point i.
+ * Non-zero handles override the tangent direction + magnitude.
+ */
+export function catmullRomSplineWithHandles(
+  points: Vec2[],
+  handles: Vec2[],
+  segmentsPerSpan = 12,
+): Vec2[] {
+  if (points.length < 2) return [...points]
+
+  const n = points.length
+
+  // Effective tangent at each point
+  const tangents: Vec2[] = points.map((_, i) => {
+    const h = handles[i]
+    if (h && (h.x !== 0 || h.y !== 0)) return h
+    return crAutoTangent(points, i)
+  })
+
+  const result: Vec2[] = []
+
+  for (let i = 0; i < n - 1; i++) {
+    const p0 = points[i]
+    const p1 = points[i + 1]
+    const m0 = tangents[i]
+    const m1 = tangents[i + 1]
+
+    for (let j = 0; j < segmentsPerSpan; j++) {
+      const t = j / segmentsPerSpan
+      const t2 = t * t
+      const t3 = t2 * t
+      // Cubic Hermite basis
+      const h00 = 2 * t3 - 3 * t2 + 1
+      const h10 = t3 - 2 * t2 + t
+      const h01 = -2 * t3 + 3 * t2
+      const h11 = t3 - t2
+      result.push({
+        x: h00 * p0.x + h10 * m0.x + h01 * p1.x + h11 * m1.x,
+        y: h00 * p0.y + h10 * m0.y + h01 * p1.y + h11 * m1.y,
+      })
+    }
+  }
+
+  result.push(points[n - 1])
+  return result
+}
+
+/**
  * Sample a piecewise-linear distribution curve at parameter t (0→1)
  * Points must be sorted by x. Returns the interpolated y value.
  */

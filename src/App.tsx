@@ -15,7 +15,8 @@ import ChallengeList from './components/puzzle/ChallengeList'
 import Celebration from './components/puzzle/Celebration'
 import BladeSectionEditor from './components/editor/BladeSectionEditor'
 import SectionPreview from './components/editor/SectionPreview'
-import AirfoilBezierEditor from './components/editor/AirfoilBezierEditor'
+import CentralController from './components/ui/CentralController'
+import AirfoilSelector from './components/ui/AirfoilSelector'
 import { TooltipProvider } from './components/ui/tooltip'
 import { ScrollArea } from './components/ui/scroll-area'
 import { Button } from './components/ui/button'
@@ -111,13 +112,10 @@ export default function App() {
                 <div className="flex-1 relative rounded-lg border border-border overflow-hidden bg-background min-h-0">
                   <KaleidoscopeCanvas />
                   <PuzzleHUD />
+                  <CentralController />
                   <CanvasHint text="Click to add · Drag to reshape · Ctrl+Z undo" />
                 </div>
                 <SectionPanel />
-              </div>
-            ) : mode === 'airfoil' ? (
-              <div className="flex-1 rounded-lg border border-border overflow-hidden bg-background min-h-0">
-                <AirfoilBezierEditor />
               </div>
             ) : mode === 'side' ? (
               <div className="flex-1 rounded-lg border border-border overflow-hidden bg-background">
@@ -126,7 +124,7 @@ export default function App() {
             ) : (
               <div className="flex-1 relative rounded-lg border border-border overflow-hidden bg-background">
                 <TurbineViewer />
-                <CanvasHint text="Drag to orbit · Scroll to zoom" />
+                <CanvasHint text="Drag to orbit · Scroll to zoom · Auto-rotates when idle" />
               </div>
             )}
 
@@ -154,6 +152,11 @@ export default function App() {
                 <ScrollArea className="flex-1">
                   <div className="p-4 space-y-6">
                     <ParameterPanel />
+                    {mode === 'draw' && (
+                      <div className="border-t border-border pt-6">
+                        <AirfoilSelector />
+                      </div>
+                    )}
                     {mode === 'draw' && (
                       <div className="border-t border-border pt-6">
                         <BladeSectionEditor />

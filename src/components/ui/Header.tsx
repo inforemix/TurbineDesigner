@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useTurbineStore } from '../../stores/turbineStore'
 import { usePuzzleStore } from '../../stores/puzzleStore'
 import { useThemeStore } from '../../stores/themeStore'
@@ -6,9 +7,11 @@ import { Badge } from './badge'
 import { Button } from './button'
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip'
 import { Sun, Moon, Zap } from 'lucide-react'
+import SavePanel from './SavePanel'
 
 export default function Header() {
-  const { mode, setMode, bloomTier } = useTurbineStore()
+  const { mode, setMode, bloomTier, savedDesigns } = useTurbineStore()
+  const [showSave, setShowSave] = useState(false)
   const { activeChallengeId, showChallengeList, setShowChallengeList, completedChallenges } = usePuzzleStore()
   const { theme, toggleTheme } = useThemeStore()
 
@@ -48,27 +51,62 @@ export default function Header() {
       {/* ── Mode Toggle ───────────────────────────────────────────────── */}
       <div className="flex items-center bg-background rounded-lg border border-border p-1 gap-0.5">
         {([
-          { value: 'draw', label: 'Draw'  },
-          { value: 'airfoil', label: 'Airfoil' },
-          { value: 'side', label: 'Side'  },
-          { value: 'view', label: '3D'    },
+          { value: 'draw', label: 'Draw', dot: null },
+          { value: 'side', label: 'Side', dot: null },
+          { value: 'view', label: '3D', dot: null },
         ] as const).map((m) => (
           <button
             key={m.value}
             onClick={() => setMode(m.value)}
-            className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all ${
+            className={`relative px-4 py-1.5 rounded-md text-xs font-semibold transition-all ${
               mode === m.value
                 ? 'bg-teal/20 text-teal shadow-sm'
                 : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
             }`}
           >
             {m.label}
+            {m.dot && (
+              <span
+                className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full"
+                style={{ background: m.dot }}
+              />
+            )}
           </button>
         ))}
       </div>
 
       {/* ── Right controls ────────────────────────────────────────────── */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 relative">
+        {/* Save button */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowSave(v => !v)}
+              className={`h-8 px-3 text-xs font-semibold border-border bg-background transition-colors ${
+                showSave ? 'text-teal border-teal/40 bg-teal/5' : 'text-muted-foreground hover:text-teal hover:border-teal/40'
+              }`}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                <polyline points="17 21 17 13 7 13 7 21" />
+                <polyline points="7 3 7 8 15 8" />
+              </svg>
+              <span className="hidden sm:inline ml-1.5">Save</span>
+              {savedDesigns.length > 0 && (
+                <Badge className="ml-1.5 text-[9px] h-4 px-1.5 bg-teal/20 text-teal border-teal/30 font-bold">
+                  {savedDesigns.length}
+                </Badge>
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Save & load designs</TooltipContent>
+        </Tooltip>
+
+        {/* Save dropdown panel */}
+        {showSave && <SavePanel onClose={() => setShowSave(false)} />}
+
         {/* Active challenge badge */}
         {activeChallenge && (
           <Badge

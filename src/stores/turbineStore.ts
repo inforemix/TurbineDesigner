@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import { generateParametricProfile } from '../utils/profileGenerator'
+import type { AirfoilPresetName } from '../utils/airfoil'
+export type { AirfoilPresetName }
 
 export interface Vec2 {
   x: number
@@ -7,10 +9,10 @@ export interface Vec2 {
 }
 
 export type SymmetryMode = 'pinwheel' | 'snowflake' | 'helix' | 'freeform'
-export type AppMode = 'draw' | 'airfoil' | 'side' | 'view'
+export type AppMode = 'draw' | 'side' | 'view'
 export type BloomTier = 'dormant' | 'seedling' | 'flourishing' | 'radiant'
 
-export type MaterialPreset = 'teal-metal' | 'brushed-steel' | 'carbon-fiber' | 'copper-patina' | 'frosted-glass' | 'matte-white'
+export type MaterialPreset = 'teal-metal' | 'brushed-steel' | 'carbon-fiber' | 'copper-patina' | 'frosted-glass' | 'matte-white' | 'neon-shader'
 
 export interface MaterialConfig {
   label: string
@@ -20,15 +22,102 @@ export interface MaterialConfig {
   opacity: number
   transparent: boolean
   emissiveIntensity: number
+  emissiveColor?: string  // separate emissive color (defaults to base color)
+  clearcoat?: number
+}
+
+// ── Saved custom airfoil profiles ─────────────────────────────────────────────
+export interface CustomAirfoil {
+  name: string
+  m: number
+  p: number
+  t: number
+}
+
+const LS_AIRFOILS_KEY = 'turbinebloom_custom_airfoils'
+
+function loadCustomAirfoils(): CustomAirfoil[] {
+  try {
+    const raw = localStorage.getItem(LS_AIRFOILS_KEY)
+    if (raw) return JSON.parse(raw) as CustomAirfoil[]
+  } catch { /* ignore */ }
+  return []
+}
+
+function persistCustomAirfoils(a: CustomAirfoil[]) {
+  try { localStorage.setItem(LS_AIRFOILS_KEY, JSON.stringify(a)) } catch { /* ignore */ }
+}
+
+// ── Saved designs ─────────────────────────────────────────────────────────────
+export interface SavedDesign {
+  name: string
+  timestamp: number
+  bladePoints: Vec2[]
+  bladeCount: number
+  height: number
+  twist: number
+  taper: number
+  thickness: number
+  symmetryMode: SymmetryMode
+  materialPreset: MaterialPreset
+  chordCurve: Vec2[]
+  twistCurve: Vec2[]
+  airfoilPreset: AirfoilPresetName
+  customNacaM: number
+  customNacaP: number
+  customNacaT: number
+  // legacy (kept for backward compat)
+  airfoilUpper?: Vec2[]
+  airfoilLower?: Vec2[]
+}
+
+const LS_DESIGNS_KEY = 'turbinebloom_v1_designs'
+
+function loadPersistedDesigns(): SavedDesign[] {
+  try {
+    const raw = localStorage.getItem(LS_DESIGNS_KEY)
+    if (raw) return JSON.parse(raw) as SavedDesign[]
+  } catch { /* ignore */ }
+  return []
+}
+
+function persistDesigns(designs: SavedDesign[]) {
+  try { localStorage.setItem(LS_DESIGNS_KEY, JSON.stringify(designs)) } catch { /* ignore */ }
 }
 
 export const MATERIAL_PRESETS: Record<MaterialPreset, MaterialConfig> = {
-  'teal-metal': { label: 'Teal Metal', color: '#2dd4bf', metalness: 0.55, roughness: 0.35, opacity: 1, transparent: false, emissiveIntensity: 0 },
-  'brushed-steel': { label: 'Brushed Steel', color: '#b0b8c8', metalness: 0.85, roughness: 0.25, opacity: 1, transparent: false, emissiveIntensity: 0 },
-  'carbon-fiber': { label: 'Carbon Fiber', color: '#2a2a2a', metalness: 0.3, roughness: 0.6, opacity: 1, transparent: false, emissiveIntensity: 0 },
-  'copper-patina': { label: 'Copper Patina', color: '#6db89e', metalness: 0.7, roughness: 0.45, opacity: 1, transparent: false, emissiveIntensity: 0.05 },
-  'frosted-glass': { label: 'Frosted Glass', color: '#c8e6f0', metalness: 0.1, roughness: 0.15, opacity: 0.7, transparent: true, emissiveIntensity: 0.1 },
-  'matte-white': { label: 'Matte White', color: '#f0f0f0', metalness: 0.05, roughness: 0.9, opacity: 1, transparent: false, emissiveIntensity: 0 },
+  'teal-metal':    { label: 'Teal Metal',    color: '#2dd4bf', metalness: 0.55, roughness: 0.35, opacity: 1,   transparent: false, emissiveIntensity: 0 },
+  'brushed-steel': { label: 'Brushed Steel', color: '#b0b8c8', metalness: 0.85, roughness: 0.25, opacity: 1,   transparent: false, emissiveIntensity: 0 },
+  'carbon-fiber':  { label: 'Carbon Fiber',  color: '#2a2a2a', metalness: 0.3,  roughness: 0.6,  opacity: 1,   transparent: false, emissiveIntensity: 0, clearcoat: 0.8 },
+  'copper-patina': { label: 'Copper Patina', color: '#6db89e', metalness: 0.7,  roughness: 0.45, opacity: 1,   transparent: false, emissiveIntensity: 0.05 },
+  'frosted-glass': { label: 'Frosted Glass', color: '#c8e6f0', metalness: 0.1,  roughness: 0.15, opacity: 0.7, transparent: true,  emissiveIntensity: 0.1 },
+  'matte-white':   { label: 'Matte White',   color: '#f0f0f0', metalness: 0.05, roughness: 0.9,  opacity: 1,   transparent: false, emissiveIntensity: 0 },
+  'neon-shader':   { label: 'Neon Shader',   color: '#2dd4bf', metalness: 0,    roughness: 0,    opacity: 1,   transparent: false, emissiveIntensity: 0 },
+}
+
+// ── Neon Shader configuration ──────────────────────────────────────────────────
+export type NeonPattern = 0 | 1 | 2 | 3 | 4  // wave | scanlines | grid | hex | circuit
+
+export interface NeonConfig {
+  colorA: string        // root/base color
+  colorB: string        // tip/gradient color
+  rimColor: string      // rim glow color
+  pulseSpeed: number    // animation speed
+  pulseFreq: number     // wave frequency along height
+  pattern: NeonPattern  // 0=wave 1=scanlines 2=grid 3=hex 4=circuit
+  fresnelPower: number  // rim glow sharpness
+  opacity: number       // overall opacity
+}
+
+export const DEFAULT_NEON_CONFIG: NeonConfig = {
+  colorA: '#0d5c63',
+  colorB: '#7c3aed',
+  rimColor: '#2dd4bf',
+  pulseSpeed: 2.5,
+  pulseFreq: 8,
+  pattern: 0,
+  fresnelPower: 1.8,
+  opacity: 0.85,
 }
 
 // Preset blade curves
@@ -112,6 +201,12 @@ interface TurbineState {
   clearBlade: () => void
   deleteBladePoint: (index: number) => void
 
+  // Bezier tangent handles (one per blade point, {0,0} = auto Catmull-Rom)
+  bladeHandles: Vec2[]
+  updateBladeHandle: (index: number, handle: Vec2) => void
+  resetBladeHandle: (index: number) => void
+  resetAllHandles: () => void
+
   // Undo/redo (history-based, used by drawing ops)
   history: Vec2[][]
   historyIndex: number
@@ -180,6 +275,12 @@ interface TurbineState {
   // Material
   materialPreset: MaterialPreset
   setMaterialPreset: (preset: MaterialPreset) => void
+  neonConfig: NeonConfig
+  setNeonConfig: (partial: Partial<NeonConfig>) => void
+  // Per-preset material attribute overrides (user customizations)
+  materialOverrides: Partial<Record<MaterialPreset, Partial<MaterialConfig>>>
+  setMaterialOverride: (preset: MaterialPreset, partial: Partial<MaterialConfig>) => void
+  resetMaterialOverride: (preset: MaterialPreset) => void
 
   // Wind simulation
   windSpeed: number
@@ -200,6 +301,27 @@ interface TurbineState {
 
   // Computed physics update
   updatePhysics: () => void
+
+  // Airfoil cross-section preset
+  airfoilPreset: AirfoilPresetName
+  setAirfoilPreset: (preset: AirfoilPresetName) => void
+  customNacaM: number
+  customNacaP: number
+  customNacaT: number
+  setCustomNaca: (m: number, p: number, t: number) => void
+  customAirfoils: CustomAirfoil[]
+  saveCustomAirfoil: (name: string) => void
+  deleteCustomAirfoil: (name: string) => void
+  // legacy
+  airfoilUpper: Vec2[]
+  airfoilLower: Vec2[]
+  setAirfoilProfile: (upper: Vec2[], lower: Vec2[]) => void
+
+  // Saved designs
+  savedDesigns: SavedDesign[]
+  saveDesign: (name: string) => void
+  loadSavedDesign: (name: string) => void
+  deleteDesign: (name: string) => void
 }
 
 function computeBloomTier(cp: number, windSpeed: number): BloomTier {
@@ -233,15 +355,20 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
   setTransitionProgress: (v) => set({ transitionProgress: v }),
 
   bladePoints: [...PRESETS['Breeze Petal']],
+  bladeHandles: PRESETS['Breeze Petal'].map(() => ({ x: 0, y: 0 })),
   setBladePoints: (pts) => {
     if (!_skipHistoryPush) get().pushHistory()
-    set({ bladePoints: pts, activePreset: null })
+    // Resize handles: keep existing, fill new with zeros
+    const prev = get().bladeHandles
+    const handles = pts.map((_, i) => prev[i] ?? { x: 0, y: 0 })
+    set({ bladePoints: pts, bladeHandles: handles, activePreset: null })
     get().updatePhysics()
   },
   addBladePoint: (pt) => {
     if (!_skipHistoryPush) get().pushHistory()
     const pts = [...get().bladePoints, pt]
-    set({ bladePoints: pts, activePreset: null })
+    const handles = [...get().bladeHandles, { x: 0, y: 0 }]
+    set({ bladePoints: pts, bladeHandles: handles, activePreset: null })
     get().updatePhysics()
   },
   updateBladePoint: (index, pt) => {
@@ -253,14 +380,28 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
   },
   clearBlade: () => {
     get().pushHistory()
-    set({ bladePoints: [], activePreset: null })
+    set({ bladePoints: [], bladeHandles: [], activePreset: null })
     get().updatePhysics()
   },
   deleteBladePoint: (index) => {
     get().pushHistory()
     const pts = get().bladePoints.filter((_, i) => i !== index)
-    set({ bladePoints: pts, activePreset: null })
+    const handles = get().bladeHandles.filter((_, i) => i !== index)
+    set({ bladePoints: pts, bladeHandles: handles, activePreset: null })
     get().updatePhysics()
+  },
+  updateBladeHandle: (index, handle) => {
+    const handles = [...get().bladeHandles]
+    handles[index] = handle
+    set({ bladeHandles: handles })
+  },
+  resetBladeHandle: (index) => {
+    const handles = [...get().bladeHandles]
+    handles[index] = { x: 0, y: 0 }
+    set({ bladeHandles: handles })
+  },
+  resetAllHandles: () => {
+    set({ bladeHandles: get().bladePoints.map(() => ({ x: 0, y: 0 })) })
   },
 
   history: [],
@@ -346,7 +487,7 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
   setTwist: (t) => set({ twist: t }),
   taper: 0,
   setTaper: (t) => set({ taper: t }),
-  thickness: 0.06,
+  thickness: 0.15,
   setThickness: (t) => set({ thickness: t }),
 
   chordCurve: [{ x: 0, y: 1.0 }, { x: 1, y: 1.0 }],
@@ -368,13 +509,24 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
     const { parametricCamber, parametricCamberPeak, parametricLeRadius, parametricTrailingSweep } = get()
     const pts = generateParametricProfile(parametricCamber, parametricCamberPeak, parametricLeRadius, parametricTrailingSweep)
     _skipHistoryPush = true
-    set({ bladePoints: pts, activePreset: null })
+    set({ bladePoints: pts, bladeHandles: pts.map(() => ({ x: 0, y: 0 })), activePreset: null })
     _skipHistoryPush = false
     get().updatePhysics()
   },
 
   materialPreset: 'teal-metal' as MaterialPreset,
   setMaterialPreset: (preset) => set({ materialPreset: preset }),
+  neonConfig: { ...DEFAULT_NEON_CONFIG },
+  setNeonConfig: (partial) => set(s => ({ neonConfig: { ...s.neonConfig, ...partial } })),
+  materialOverrides: {},
+  setMaterialOverride: (preset, partial) => set(s => ({
+    materialOverrides: { ...s.materialOverrides, [preset]: { ...(s.materialOverrides[preset] ?? {}), ...partial } }
+  })),
+  resetMaterialOverride: (preset) => set(s => {
+    const next = { ...s.materialOverrides }
+    delete next[preset]
+    return { materialOverrides: next }
+  }),
 
   windSpeed: 6,
   setWindSpeed: (s) => { set({ windSpeed: s }); get().updatePhysics() },
@@ -393,7 +545,7 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
     if (pts) {
       get().pushHistory()
       get().pushUndo()
-      set({ bladePoints: [...pts], activePreset: name })
+      set({ bladePoints: [...pts], bladeHandles: pts.map(() => ({ x: 0, y: 0 })), activePreset: name })
       get().updatePhysics()
     }
   },
@@ -411,5 +563,85 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
       powerOutput: power,
       bloomTier: tier,
     })
+  },
+
+  // Airfoil preset
+  airfoilPreset: 'symmetric' as AirfoilPresetName,
+  setAirfoilPreset: (preset) => set({ airfoilPreset: preset }),
+  customNacaM: 0.02,
+  customNacaP: 0.4,
+  customNacaT: 0.12,
+  setCustomNaca: (m, p, t) => set({ customNacaM: m, customNacaP: p, customNacaT: t }),
+  customAirfoils: loadCustomAirfoils(),
+  saveCustomAirfoil: (name) => {
+    const { customNacaM, customNacaP, customNacaT, customAirfoils } = get()
+    const updated = [...customAirfoils.filter(a => a.name !== name), { name, m: customNacaM, p: customNacaP, t: customNacaT }]
+    persistCustomAirfoils(updated)
+    set({ customAirfoils: updated })
+  },
+  deleteCustomAirfoil: (name) => {
+    const updated = get().customAirfoils.filter(a => a.name !== name)
+    persistCustomAirfoils(updated)
+    set({ customAirfoils: updated })
+  },
+  // legacy
+  airfoilUpper: [],
+  airfoilLower: [],
+  setAirfoilProfile: (upper, lower) => set({ airfoilUpper: upper, airfoilLower: lower }),
+
+  // Saved designs
+  savedDesigns: loadPersistedDesigns(),
+  saveDesign: (name) => {
+    const s = get()
+    const design: SavedDesign = {
+      name,
+      timestamp: Date.now(),
+      bladePoints: s.bladePoints.map(p => ({ ...p })),
+      bladeCount: s.bladeCount,
+      height: s.height,
+      twist: s.twist,
+      taper: s.taper,
+      thickness: s.thickness,
+      symmetryMode: s.symmetryMode,
+      materialPreset: s.materialPreset,
+      chordCurve: s.chordCurve.map(p => ({ ...p })),
+      twistCurve: s.twistCurve.map(p => ({ ...p })),
+      airfoilPreset: s.airfoilPreset,
+      customNacaM: s.customNacaM,
+      customNacaP: s.customNacaP,
+      customNacaT: s.customNacaT,
+    }
+    const designs = [...s.savedDesigns.filter(d => d.name !== name), design]
+    persistDesigns(designs)
+    set({ savedDesigns: designs })
+  },
+  loadSavedDesign: (name) => {
+    const design = get().savedDesigns.find(d => d.name === name)
+    if (!design) return
+    get().pushUndo()
+    set({
+      bladePoints: design.bladePoints.map(p => ({ ...p })),
+      bladeHandles: design.bladePoints.map(() => ({ x: 0, y: 0 })),
+      bladeCount: design.bladeCount,
+      height: design.height,
+      twist: design.twist,
+      taper: design.taper,
+      thickness: design.thickness,
+      symmetryMode: design.symmetryMode,
+      materialPreset: design.materialPreset as MaterialPreset,
+      chordCurve: design.chordCurve.map(p => ({ ...p })),
+      twistCurve: design.twistCurve.map(p => ({ ...p })),
+      airfoilPreset: design.airfoilPreset ?? 'symmetric',
+      customNacaM: design.customNacaM ?? 0.02,
+      customNacaP: design.customNacaP ?? 0.4,
+      customNacaT: design.customNacaT ?? 0.12,
+      activePreset: null,
+    })
+    get().updatePhysics()
+  },
+  deleteDesign: (name) => {
+    const designs = get().savedDesigns.filter(d => d.name !== name)
+    persistDesigns(designs)
+    set({ savedDesigns: designs })
   },
 }))
