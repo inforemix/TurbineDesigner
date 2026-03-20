@@ -4,9 +4,11 @@ import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import { useTurbineStore, MATERIAL_PRESETS } from '../../stores/turbineStore'
 import { catmullRomSpline } from '../../utils/spline'
+import { resolveProfileData, halfThickNorm } from '../../utils/airfoil'
 
 function MiniTurbineMesh() {
-  const { bladePoints, bladeCount, height, twist, taper, symmetryMode, materialPreset, curveSmoothing } = useTurbineStore()
+  const { bladePoints, bladeCount, height, twist, taper, symmetryMode, materialPreset, curveSmoothing,
+    thickness, airfoilPreset, customNacaM, customNacaP, customNacaT } = useTurbineStore()
   const matConfig = MATERIAL_PRESETS[materialPreset === 'neon-shader' ? 'teal-metal' : materialPreset]
 
   const meshData = useMemo(() => {
@@ -19,6 +21,12 @@ function MiniTurbineMesh() {
     const isSnowflake = symmetryMode === 'snowflake'
     const camberSigns = isSnowflake ? [1, -1] : [1]
     const geos: THREE.BufferGeometry[] = []
+    const cs = curveSegments
+
+    const profile = resolveProfileData(airfoilPreset, customNacaM, customNacaP, customNacaT)
+    const chordMin = smooth[0].x
+    const chordMax = smooth[cs - 1].x
+    const chordSpan = Math.max(chordMax - chordMin, 0.001)
 
     for (let b = 0; b < bladeCount; b++) {
       for (const camberSign of camberSigns) {
@@ -30,22 +38,40 @@ function MiniTurbineMesh() {
           const twistAngle = twist * hFrac * (Math.PI / 180)
           const taperScale = 1.0 - taper * Math.abs(hFrac - 0.5) * 2
           const helicalOffset = isHelical ? hFrac * Math.PI * 0.5 : 0
-          for (let c = 0; c < curveSegments; c++) {
+          const totalTwist = twistAngle + helicalOffset
+          const cosT = Math.cos(totalTwist), sinT = Math.sin(totalTwist)
+          const thickScale = thickness * bladeRadius * taperScale
+
+          for (let c = 0; c < cs; c++) {
             const pt = smooth[c]
+            const normX = (pt.x - chordMin) / chordSpan
+            const halfT = halfThickNorm(profile, normX) * thickScale
             const radialDist = pt.x * bladeRadius * taperScale
             const camber = pt.y * bladeRadius * taperScale * camberSign
-            const totalTwist = twistAngle + helicalOffset
-            const cos = Math.cos(totalTwist), sin = Math.sin(totalTwist)
-            positions.push(radialDist * cos - camber * sin, y, radialDist * sin + camber * cos)
+            // upper
+            const uy = camber + halfT
+            positions.push(radialDist * cosT - uy * sinT, y, radialDist * sinT + uy * cosT)
+            // lower
+            const ly = camber - halfT
+            positions.push(radialDist * cosT - ly * sinT, y, radialDist * sinT + ly * cosT)
           }
         }
+        const vIdx = (h: number, c: number, isLower: boolean) => (h * cs + c) * 2 + (isLower ? 1 : 0)
         for (let h = 0; h < heightSegments; h++) {
-          for (let c = 0; c < curveSegments - 1; c++) {
-            const a = h * curveSegments + c
-            const bIdx = a + curveSegments
-            const c1 = a + 1, d = bIdx + 1
-            indices.push(a, bIdx, c1, c1, bIdx, d)
+          for (let c = 0; c < cs - 1; c++) {
+            const u00 = vIdx(h, c, false), u10 = vIdx(h+1, c, false)
+            const u01 = vIdx(h, c+1, false), u11 = vIdx(h+1, c+1, false)
+            indices.push(u00, u10, u01, u01, u10, u11)
+            const l00 = vIdx(h, c, true), l10 = vIdx(h+1, c, true)
+            const l01 = vIdx(h, c+1, true), l11 = vIdx(h+1, c+1, true)
+            indices.push(l00, l01, l10, l10, l01, l11)
           }
+          const lu = vIdx(h, 0, false), ll = vIdx(h, 0, true)
+          const lu1 = vIdx(h+1, 0, false), ll1 = vIdx(h+1, 0, true)
+          indices.push(ll, lu, ll1, ll1, lu, lu1)
+          const tu = vIdx(h, cs-1, false), tl = vIdx(h, cs-1, true)
+          const tu1 = vIdx(h+1, cs-1, false), tl1 = vIdx(h+1, cs-1, true)
+          indices.push(tu, tl, tu1, tu1, tl, tl1)
         }
         const geo = new THREE.BufferGeometry()
         geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
@@ -56,7 +82,8 @@ function MiniTurbineMesh() {
       }
     }
     return { geos, turbineHeight: height }
-  }, [bladePoints, bladeCount, height, twist, taper, symmetryMode, curveSmoothing])
+  }, [bladePoints, bladeCount, height, twist, taper, symmetryMode, curveSmoothing,
+      thickness, airfoilPreset, customNacaM, customNacaP, customNacaT])
 
   const bladeMat = useMemo(() => new THREE.MeshPhysicalMaterial({
     color: matConfig.color,

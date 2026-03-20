@@ -9,6 +9,72 @@ export interface AirfoilProfile {
   combined: Point2D[] // closed polygon: upper LE→TE, lower TE→LE
 }
 
+// ── Preset selector types ─────────────────────────────────────────────────────
+
+export type AirfoilPresetName = 'symmetric' | 'cambered' | 'high-lift' | 'thin' | 'custom'
+
+export interface AirfoilProfileData {
+  label: string
+  description: string
+  upper: Point2D[]
+  lower: Point2D[]
+  maxHalfThick: number  // max (upper.y - lower.y) / 2, used for 3D scaling
+  m: number
+  p: number
+  t: number
+}
+
+/** Build a named profile from NACA params */
+export function buildProfileData(m: number, p: number, t: number, label: string, description: string): AirfoilProfileData {
+  const profile = generateNACA4(m, p, t, 20)
+  const maxHalfThick = Math.max(...profile.upper.map((u, i) => (u.y - (profile.lower[i]?.y ?? 0)) / 2), 0.001)
+  return { label, description, upper: profile.upper, lower: profile.lower, maxHalfThick, m, p, t }
+}
+
+export const AIRFOIL_PROFILE_PRESETS: Record<Exclude<AirfoilPresetName, 'custom'>, AirfoilProfileData> = {
+  'symmetric': buildProfileData(0,    0.4, 0.12, 'Symmetric', 'NACA 0012 — equal lift both sides'),
+  'cambered':  buildProfileData(0.02, 0.4, 0.12, 'Cambered',  'NACA 2412 — moderate lift bias'),
+  'high-lift': buildProfileData(0.04, 0.4, 0.12, 'High-Lift', 'NACA 4412 — max lift coefficient'),
+  'thin':      buildProfileData(0,    0.4, 0.05, 'Thin',      'NACA 0005 — low drag, flat'),
+}
+
+/** Interpolate a surface (upper or lower) at chord position x */
+export function interpSurface(pts: Point2D[], x: number): number {
+  if (pts.length === 0) return 0
+  if (x <= pts[0].x) return pts[0].y
+  if (x >= pts[pts.length - 1].x) return pts[pts.length - 1].y
+  for (let i = 0; i < pts.length - 1; i++) {
+    if (pts[i + 1].x >= x) {
+      const frac = (x - pts[i].x) / (pts[i + 1].x - pts[i].x)
+      return pts[i].y + frac * (pts[i + 1].y - pts[i].y)
+    }
+  }
+  return 0
+}
+
+/**
+ * Returns normalized half-thickness at chord position x.
+ * Value in [0, 1] where 1 = thickest point of the profile.
+ */
+export function halfThickNorm(profile: AirfoilProfileData, x: number): number {
+  if (profile.maxHalfThick <= 0) return 0
+  const yt = (interpSurface(profile.upper, x) - interpSurface(profile.lower, x)) / 2
+  return yt / profile.maxHalfThick
+}
+
+/** Get the active profile for rendering/mesh generation */
+export function resolveProfileData(
+  preset: AirfoilPresetName,
+  customM: number,
+  customP: number,
+  customT: number,
+): AirfoilProfileData {
+  if (preset === 'custom') return buildProfileData(customM, customP, customT, 'Custom', 'Custom NACA profile')
+  return AIRFOIL_PROFILE_PRESETS[preset]
+}
+
+
+
 /**
  * Generate a NACA 4-digit airfoil (e.g. NACA 2412 → m=0.02, p=0.4, t=0.12).
  * @param m  max camber as fraction of chord (0–0.09)

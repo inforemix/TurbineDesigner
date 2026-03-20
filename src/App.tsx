@@ -16,6 +16,7 @@ import Celebration from './components/puzzle/Celebration'
 import BladeSectionEditor from './components/editor/BladeSectionEditor'
 import SectionPreview from './components/editor/SectionPreview'
 import CentralController from './components/ui/CentralController'
+import AirfoilSelector from './components/ui/AirfoilSelector'
 import { TooltipProvider } from './components/ui/tooltip'
 import { ScrollArea } from './components/ui/scroll-area'
 import { Button } from './components/ui/button'
@@ -151,6 +152,11 @@ export default function App() {
                 <ScrollArea className="flex-1">
                   <div className="p-4 space-y-6">
                     <ParameterPanel />
+                    {mode === 'draw' && (
+                      <div className="border-t border-border pt-6">
+                        <AirfoilSelector />
+                      </div>
+                    )}
                     {mode === 'draw' && (
                       <div className="border-t border-border pt-6">
                         <BladeSectionEditor />

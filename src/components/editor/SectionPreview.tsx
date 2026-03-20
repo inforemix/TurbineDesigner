@@ -1,6 +1,7 @@
 import { useRef, useEffect } from 'react'
 import { useTurbineStore } from '../../stores/turbineStore'
 import { catmullRomSpline } from '../../utils/spline'
+import { resolveProfileData } from '../../utils/airfoil'
 
 /**
  * 2.5D cross-section preview: shows the blade profile at the selected height
@@ -34,8 +35,14 @@ export default function SectionPreview() {
       const {
         bladePoints, bladeSections, selectedSectionIndex,
         twist, taper, thickness,
-        airfoilUpper, airfoilLower,
+        airfoilPreset, customNacaM, customNacaP, customNacaT,
       } = store
+      const airfoilProfile = resolveProfileData(airfoilPreset, customNacaM, customNacaP, customNacaT)
+      // Always use airfoil (profile is always resolved now)
+      const hasAirfoil = true
+      const airfoilUpper = airfoilProfile.upper
+      const airfoilLower = airfoilProfile.lower
+      const maxThick = airfoilProfile.maxHalfThick * 2
       const dpr = Math.min(window.devicePixelRatio, 2)
       const w = canvas.width / dpr
       const h = canvas.height / dpr
@@ -61,8 +68,7 @@ export default function SectionPreview() {
       const cy = h / 2
       const scale = Math.min(w, h) * 0.35
 
-      // Determine if we have airfoil data
-      const hasAirfoil = airfoilUpper.length >= 3 && airfoilLower.length >= 3
+      // hasAirfoil is always true now — we always render the preset profile
 
       // Draw grid
       ctx.strokeStyle = 'rgba(45, 212, 191, 0.06)'
@@ -97,12 +103,7 @@ export default function SectionPreview() {
           // We map chord length = effectiveTaper * scale pixels
           const chordPx = effectiveTaper * scale
 
-          // Find airfoil vertical extent to auto-scale thickness
-          const maxThick = Math.max(
-            ...airfoilUpper.map(p => Math.abs(p.y)),
-            ...airfoilLower.map(p => Math.abs(p.y)),
-            0.01,
-          )
+          // Use resolved profile's max thickness for scaling
           // Thickness scale: make max thickness ~18% of chord for readability
           const thickScale = Math.min(chordPx * 0.5, chordPx * (0.18 / maxThick))
 
@@ -214,14 +215,12 @@ export default function SectionPreview() {
       ctx.font = '9px system-ui'
       ctx.fillText(`Twist: ${(twist * selSec.heightFraction + selSec.twistOffset).toFixed(1)}°  Taper: ${selTaper.toFixed(2)}`, 8, 26)
 
-      // Airfoil badge
-      if (hasAirfoil) {
-        ctx.fillStyle = 'rgba(167,139,250,0.8)'
-        ctx.font = '8px system-ui'
-        ctx.textAlign = 'right'
-        ctx.fillText('✦ airfoil shape', w - 8, 14)
-        ctx.textAlign = 'left'
-      }
+      // Airfoil badge — show active preset name
+      ctx.fillStyle = 'rgba(167,139,250,0.8)'
+      ctx.font = '8px system-ui'
+      ctx.textAlign = 'right'
+      ctx.fillText(`✦ ${airfoilProfile.label || airfoilPreset}`, w - 8, 14)
+      ctx.textAlign = 'left'
 
       animRef.current = requestAnimationFrame(render)
     }

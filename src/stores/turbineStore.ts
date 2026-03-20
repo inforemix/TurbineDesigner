@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import { generateParametricProfile } from '../utils/profileGenerator'
+import type { AirfoilPresetName } from '../utils/airfoil'
+export type { AirfoilPresetName }
 
 export interface Vec2 {
   x: number
@@ -22,6 +24,28 @@ export interface MaterialConfig {
   emissiveIntensity: number
 }
 
+// ── Saved custom airfoil profiles ─────────────────────────────────────────────
+export interface CustomAirfoil {
+  name: string
+  m: number
+  p: number
+  t: number
+}
+
+const LS_AIRFOILS_KEY = 'turbinebloom_custom_airfoils'
+
+function loadCustomAirfoils(): CustomAirfoil[] {
+  try {
+    const raw = localStorage.getItem(LS_AIRFOILS_KEY)
+    if (raw) return JSON.parse(raw) as CustomAirfoil[]
+  } catch { /* ignore */ }
+  return []
+}
+
+function persistCustomAirfoils(a: CustomAirfoil[]) {
+  try { localStorage.setItem(LS_AIRFOILS_KEY, JSON.stringify(a)) } catch { /* ignore */ }
+}
+
 // ── Saved designs ─────────────────────────────────────────────────────────────
 export interface SavedDesign {
   name: string
@@ -36,8 +60,13 @@ export interface SavedDesign {
   materialPreset: MaterialPreset
   chordCurve: Vec2[]
   twistCurve: Vec2[]
-  airfoilUpper: Vec2[]
-  airfoilLower: Vec2[]
+  airfoilPreset: AirfoilPresetName
+  customNacaM: number
+  customNacaP: number
+  customNacaT: number
+  // legacy (kept for backward compat)
+  airfoilUpper?: Vec2[]
+  airfoilLower?: Vec2[]
 }
 
 const LS_DESIGNS_KEY = 'turbinebloom_v1_designs'
@@ -234,7 +263,17 @@ interface TurbineState {
   // Computed physics update
   updatePhysics: () => void
 
-  // Airfoil cross-section (from AirfoilBezierEditor)
+  // Airfoil cross-section preset
+  airfoilPreset: AirfoilPresetName
+  setAirfoilPreset: (preset: AirfoilPresetName) => void
+  customNacaM: number
+  customNacaP: number
+  customNacaT: number
+  setCustomNaca: (m: number, p: number, t: number) => void
+  customAirfoils: CustomAirfoil[]
+  saveCustomAirfoil: (name: string) => void
+  deleteCustomAirfoil: (name: string) => void
+  // legacy
   airfoilUpper: Vec2[]
   airfoilLower: Vec2[]
   setAirfoilProfile: (upper: Vec2[], lower: Vec2[]) => void
@@ -390,7 +429,7 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
   setTwist: (t) => set({ twist: t }),
   taper: 0,
   setTaper: (t) => set({ taper: t }),
-  thickness: 0.06,
+  thickness: 0.15,
   setThickness: (t) => set({ thickness: t }),
 
   chordCurve: [{ x: 0, y: 1.0 }, { x: 1, y: 1.0 }],
@@ -457,7 +496,26 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
     })
   },
 
-  // Airfoil
+  // Airfoil preset
+  airfoilPreset: 'symmetric' as AirfoilPresetName,
+  setAirfoilPreset: (preset) => set({ airfoilPreset: preset }),
+  customNacaM: 0.02,
+  customNacaP: 0.4,
+  customNacaT: 0.12,
+  setCustomNaca: (m, p, t) => set({ customNacaM: m, customNacaP: p, customNacaT: t }),
+  customAirfoils: loadCustomAirfoils(),
+  saveCustomAirfoil: (name) => {
+    const { customNacaM, customNacaP, customNacaT, customAirfoils } = get()
+    const updated = [...customAirfoils.filter(a => a.name !== name), { name, m: customNacaM, p: customNacaP, t: customNacaT }]
+    persistCustomAirfoils(updated)
+    set({ customAirfoils: updated })
+  },
+  deleteCustomAirfoil: (name) => {
+    const updated = get().customAirfoils.filter(a => a.name !== name)
+    persistCustomAirfoils(updated)
+    set({ customAirfoils: updated })
+  },
+  // legacy
   airfoilUpper: [],
   airfoilLower: [],
   setAirfoilProfile: (upper, lower) => set({ airfoilUpper: upper, airfoilLower: lower }),
@@ -479,8 +537,10 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
       materialPreset: s.materialPreset,
       chordCurve: s.chordCurve.map(p => ({ ...p })),
       twistCurve: s.twistCurve.map(p => ({ ...p })),
-      airfoilUpper: s.airfoilUpper.map(p => ({ ...p })),
-      airfoilLower: s.airfoilLower.map(p => ({ ...p })),
+      airfoilPreset: s.airfoilPreset,
+      customNacaM: s.customNacaM,
+      customNacaP: s.customNacaP,
+      customNacaT: s.customNacaT,
     }
     const designs = [...s.savedDesigns.filter(d => d.name !== name), design]
     persistDesigns(designs)
@@ -501,8 +561,10 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
       materialPreset: design.materialPreset,
       chordCurve: design.chordCurve.map(p => ({ ...p })),
       twistCurve: design.twistCurve.map(p => ({ ...p })),
-      airfoilUpper: (design.airfoilUpper || []).map(p => ({ ...p })),
-      airfoilLower: (design.airfoilLower || []).map(p => ({ ...p })),
+      airfoilPreset: design.airfoilPreset ?? 'symmetric',
+      customNacaM: design.customNacaM ?? 0.02,
+      customNacaP: design.customNacaP ?? 0.4,
+      customNacaT: design.customNacaT ?? 0.12,
       activePreset: null,
     })
     get().updatePhysics()

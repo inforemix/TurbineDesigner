@@ -5,6 +5,7 @@ import * as THREE from 'three'
 import { useTurbineStore, MATERIAL_PRESETS } from '../../stores/turbineStore'
 import { useThemeStore } from '../../stores/themeStore'
 import { catmullRomSpline } from '../../utils/spline'
+import { resolveProfileData, halfThickNorm } from '../../utils/airfoil'
 
 function easeOutCubic(t: number) { return 1 - Math.pow(1 - t, 3) }
 function easeOutBack(t: number) { const c1 = 1.70158; const c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2) }
@@ -85,24 +86,29 @@ function TurbineMesh() {
     bladePoints, bladeCount, height, twist, taper, thickness,
     windSpeed, isSpinning, symmetryMode, materialPreset, isTransitioning, transitionProgress, curveSmoothing,
     chordCurve, twistCurve, bladeSections,
+    airfoilPreset, customNacaM, customNacaP, customNacaT,
   } = useTurbineStore()
 
   const matConfig = MATERIAL_PRESETS[materialPreset === 'neon-shader' ? 'teal-metal' : materialPreset]
   const isNeonShader = materialPreset === 'neon-shader'
 
-  // Build geometry from blade curve
+  // Build geometry from blade curve — closed airfoil cross-section
   const meshData = useMemo(() => {
     if (bladePoints.length < 2) return null
 
     const smooth = catmullRomSpline(bladePoints, curveSmoothing)
     const bladeRadius = 0.6
     const heightSegments = 24
-    const curveSegments = smooth.length
+    const cs = smooth.length          // curveSegments
     const isHelical = symmetryMode === 'helix'
     const isSnowflake = symmetryMode === 'snowflake'
-
-    // Snowflake generates bilateral pairs (camberSign ±1) per arm
     const camberSigns = isSnowflake ? [1, -1] : [1]
+
+    // Resolve airfoil profile
+    const profile = resolveProfileData(airfoilPreset, customNacaM, customNacaP, customNacaT)
+    const chordMin = smooth[0].x
+    const chordMax = smooth[cs - 1].x
+    const chordSpan = Math.max(chordMax - chordMin, 0.001)
 
     const bladeGeometries: THREE.BufferGeometry[] = []
 
@@ -111,6 +117,7 @@ function TurbineMesh() {
         const positions: number[] = []
         const indices: number[] = []
 
+        // Each height slice: cs upper vertices + cs lower vertices = 2*cs total
         for (let h = 0; h <= heightSegments; h++) {
           const hFrac = h / heightSegments
           const y = height * 0.25 + hFrac * height * 0.8
@@ -134,28 +141,61 @@ function TurbineMesh() {
 
           const twistAngle = (twist * hFrac + sectionTwistOffset) * (Math.PI / 180)
           const taperScale = (1.0 - taper * Math.abs(hFrac - 0.5) * 2) * sectionTaperScale
-
           const helicalOffset = isHelical ? hFrac * Math.PI * 0.5 : 0
+          const totalTwist = twistAngle + helicalOffset
+          const cosT = Math.cos(totalTwist), sinT = Math.sin(totalTwist)
 
-          for (let c = 0; c < curveSegments; c++) {
+          // Thickness scale: thickness param × bladeRadius × taperScale
+          const thickScale = thickness * bladeRadius * taperScale
+
+          for (let c = 0; c < cs; c++) {
             const pt = smooth[c]
+            const normX = (pt.x - chordMin) / chordSpan          // 0→1 along chord
+            const halfT = halfThickNorm(profile, normX) * thickScale
             const radialDist = pt.x * bladeRadius * taperScale
             const camber = pt.y * bladeRadius * taperScale * camberSign
-            const totalTwist = twistAngle + helicalOffset
-            const cos = Math.cos(totalTwist)
-            const sin = Math.sin(totalTwist)
-            positions.push(radialDist * cos - camber * sin, y, radialDist * sin + camber * cos)
+
+            // Upper vertex (index h*2cs + c)
+            const uy = camber + halfT
+            positions.push(radialDist * cosT - uy * sinT, y, radialDist * sinT + uy * cosT)
+
+            // Lower vertex (index h*2cs + cs + c)
+            const ly = camber - halfT
+            positions.push(radialDist * cosT - ly * sinT, y, radialDist * sinT + ly * cosT)
           }
         }
 
+        // Triangulate: interleaved layout — at slice h, chord c:
+        //   upper = (h * cs + c) * 2 + 0
+        //   lower = (h * cs + c) * 2 + 1
+        const vIdx = (h: number, c: number, isLower: boolean) => (h * cs + c) * 2 + (isLower ? 1 : 0)
+
         for (let h = 0; h < heightSegments; h++) {
-          for (let c = 0; c < curveSegments - 1; c++) {
-            const a = h * curveSegments + c
-            const bIdx = a + curveSegments
-            const c1 = a + 1
-            const d = bIdx + 1
-            indices.push(a, bIdx, c1, c1, bIdx, d)
+          for (let c = 0; c < cs - 1; c++) {
+            // Upper surface strip (outward normals — CCW from outside)
+            const u00 = vIdx(h,   c,   false)
+            const u10 = vIdx(h+1, c,   false)
+            const u01 = vIdx(h,   c+1, false)
+            const u11 = vIdx(h+1, c+1, false)
+            indices.push(u00, u10, u01, u01, u10, u11)
+
+            // Lower surface strip (reversed winding)
+            const l00 = vIdx(h,   c,   true)
+            const l10 = vIdx(h+1, c,   true)
+            const l01 = vIdx(h,   c+1, true)
+            const l11 = vIdx(h+1, c+1, true)
+            indices.push(l00, l01, l10, l10, l01, l11)
           }
+
+          // Leading-edge cap (c=0)
+          const lu = vIdx(h,   0, false), ll = vIdx(h,   0, true)
+          const lu1 = vIdx(h+1, 0, false), ll1 = vIdx(h+1, 0, true)
+          indices.push(ll, lu, ll1, ll1, lu, lu1)
+
+          // Trailing-edge cap (c=cs-1)
+          const tu = vIdx(h,   cs-1, false), tl = vIdx(h,   cs-1, true)
+          const tu1 = vIdx(h+1, cs-1, false), tl1 = vIdx(h+1, cs-1, true)
+          indices.push(tu, tl, tu1, tu1, tl, tl1)
         }
 
         const geo = new THREE.BufferGeometry()
@@ -168,7 +208,8 @@ function TurbineMesh() {
     }
 
     return bladeGeometries
-  }, [bladePoints, bladeCount, height, twist, taper, thickness, symmetryMode, curveSmoothing, chordCurve, twistCurve])
+  }, [bladePoints, bladeCount, height, twist, taper, thickness, symmetryMode, curveSmoothing,
+      chordCurve, twistCurve, bladeSections, airfoilPreset, customNacaM, customNacaP, customNacaT])
 
   // Neon shader material uniforms
   const neonUniforms = useMemo(() => ({
