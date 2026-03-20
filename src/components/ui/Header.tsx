@@ -18,9 +18,6 @@ export default function Header() {
   const activeChallenge = CHALLENGES.find(c => c.id === activeChallengeId)
   const totalCompleted = Object.keys(completedChallenges).length
 
-  const { airfoilUpper } = useTurbineStore()
-  const hasAirfoil = airfoilUpper.length >= 3
-
   const tierGlow: Record<string, string> = {
     dormant: '',
     seedling: '0 0 20px rgba(45,212,191,0.15)',
@@ -55,7 +52,6 @@ export default function Header() {
       <div className="flex items-center bg-background rounded-lg border border-border p-1 gap-0.5">
         {([
           { value: 'draw', label: 'Draw', dot: null },
-          { value: 'airfoil', label: 'Airfoil', dot: hasAirfoil ? '#a78bfa' : null },
           { value: 'side', label: 'Side', dot: null },
           { value: 'view', label: '3D', dot: null },
         ] as const).map((m) => (
