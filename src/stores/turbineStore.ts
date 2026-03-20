@@ -10,7 +10,7 @@ export type SymmetryMode = 'pinwheel' | 'snowflake' | 'helix' | 'freeform'
 export type AppMode = 'draw' | 'airfoil' | 'side' | 'view'
 export type BloomTier = 'dormant' | 'seedling' | 'flourishing' | 'radiant'
 
-export type MaterialPreset = 'teal-metal' | 'brushed-steel' | 'carbon-fiber' | 'copper-patina' | 'frosted-glass' | 'matte-white'
+export type MaterialPreset = 'teal-metal' | 'brushed-steel' | 'carbon-fiber' | 'copper-patina' | 'frosted-glass' | 'matte-white' | 'neon-shader'
 
 export interface MaterialConfig {
   label: string
@@ -29,6 +29,7 @@ export const MATERIAL_PRESETS: Record<MaterialPreset, MaterialConfig> = {
   'copper-patina': { label: 'Copper Patina', color: '#6db89e', metalness: 0.7, roughness: 0.45, opacity: 1, transparent: false, emissiveIntensity: 0.05 },
   'frosted-glass': { label: 'Frosted Glass', color: '#c8e6f0', metalness: 0.1, roughness: 0.15, opacity: 0.7, transparent: true, emissiveIntensity: 0.1 },
   'matte-white': { label: 'Matte White', color: '#f0f0f0', metalness: 0.05, roughness: 0.9, opacity: 1, transparent: false, emissiveIntensity: 0 },
+  'neon-shader': { label: 'Neon Shader', color: '#2dd4bf', metalness: 0, roughness: 0, opacity: 1, transparent: false, emissiveIntensity: 0 },
 }
 
 // Preset blade curves

@@ -32,7 +32,6 @@ function fitAndResampleBezier(raw: Vec2[], numSegments: number, samplesPerSeg: n
     const p0 = subPts[0]
     const p3 = subPts[subPts.length - 1]
 
-    // Initial control points at 1/3 and 2/3
     const i1 = Math.min(subPts.length - 1, Math.round(subPts.length / 3))
     const i2 = Math.min(subPts.length - 1, Math.round((2 * subPts.length) / 3))
 
@@ -45,7 +44,6 @@ function fitAndResampleBezier(raw: Vec2[], numSegments: number, samplesPerSeg: n
       y: p3.y + (subPts[i2].y - p3.y) * 1.5,
     }
 
-    // Iterative refinement (minimise error between Bezier and original points)
     for (let iter = 0; iter < 6; iter++) {
       const bz = new Bezier(p0.x, p0.y, cp1.x, cp1.y, cp2.x, cp2.y, p3.x, p3.y)
       const lut = bz.getLUT(subPts.length - 1)
@@ -72,11 +70,9 @@ function fitAndResampleBezier(raw: Vec2[], numSegments: number, samplesPerSeg: n
       cp2.y += errCp2Y * scale * 4
     }
 
-    // Sample the fitted Bezier uniformly
     const bz = new Bezier(p0.x, p0.y, cp1.x, cp1.y, cp2.x, cp2.y, p3.x, p3.y)
     const sampled = bz.getLUT(samplesPerSeg)
 
-    // Skip first point of subsequent segments to avoid duplicates
     const startIdx = result.length > 0 ? 1 : 0
     for (let k = startIdx; k < sampled.length; k++) {
       result.push({ x: sampled[k].x, y: sampled[k].y })
@@ -133,12 +129,11 @@ export default function KaleidoscopeCanvas() {
   const animFrameRef = useRef<number>(0)
   const timeRef = useRef(0)
   const [showMiniPreview, setShowMiniPreview] = useState(false)
-  // Buffer raw drawn points before Bezier fitting
   const rawPointsRef = useRef<Vec2[]>([])
-  // Raw pixel points for live preview during drawing
   const rawPixelPreviewRef = useRef<Vec2[]>([])
-  // Track whether we pushed undo for this gesture
   const undoPushedRef = useRef(false)
+  // Track mouse position in canvas pixel space for hover effects
+  const mousePxRef = useRef<Vec2 | null>(null)
 
   const {
     bladePoints,
@@ -222,7 +217,7 @@ export default function KaleidoscopeCanvas() {
     return null
   }, [bladePoints])
 
-  // --- Freehand draw: buffer ALL raw points, don't add to store until release ---
+  // --- Freehand draw ---
 
   const handleDown = useCallback((px: Vec2) => {
     const canvas = canvasRef.current
@@ -230,12 +225,10 @@ export default function KaleidoscopeCanvas() {
     const nearIdx = findNearestPoint(px, canvas)
 
     if (nearIdx !== null) {
-      // Drag existing point
       pushUndo()
       undoPushedRef.current = true
       setDragIndex(nearIdx)
     } else {
-      // Start freehand drawing
       pushUndo()
       undoPushedRef.current = true
       setIsDrawing(true)
@@ -252,6 +245,7 @@ export default function KaleidoscopeCanvas() {
   const handleMove = useCallback((px: Vec2) => {
     const canvas = canvasRef.current
     if (!canvas) return
+    mousePxRef.current = px
 
     if (dragIndex !== null) {
       const cx = canvas.width / 2
@@ -263,13 +257,11 @@ export default function KaleidoscopeCanvas() {
       }
       updateBladePoint(dragIndex, updated)
     } else if (isDrawing) {
-      // Buffer raw points — no store mutation yet
       const norm = pixelToNormalized(px, canvas)
       const pt: Vec2 = {
         x: Math.max(0, Math.min(1, norm.x)),
         y: Math.max(0, Math.min(0.5, Math.abs(norm.y))),
       }
-      // Only add if moved enough (raw capture, low threshold for smooth curves)
       const last = rawPointsRef.current[rawPointsRef.current.length - 1]
       if (last) {
         const dist = Math.sqrt((pt.x - last.x) ** 2 + (pt.y - last.y) ** 2)
@@ -283,11 +275,9 @@ export default function KaleidoscopeCanvas() {
 
   const handleUp = useCallback(() => {
     if (isDrawing && rawPointsRef.current.length >= 3) {
-      // Fit Bezier curves to the raw freehand points and resample smoothly
       const numSegs = Math.max(2, Math.min(5, Math.ceil(rawPointsRef.current.length / 15)))
       const smoothPts = fitAndResampleBezier(rawPointsRef.current, numSegs, 8)
 
-      // Simplify to get nice control points (≤ MAX_POINTS)
       let simplified = simplifyRDP(smoothPts, 0.008)
       if (simplified.length > MAX_POINTS) {
         simplified = simplifyRDP(smoothPts, 0.02)
@@ -296,11 +286,9 @@ export default function KaleidoscopeCanvas() {
         simplified = simplifyRDP(smoothPts, 0.04)
       }
 
-      // Merge with any existing points (replace existing with newly drawn)
       simplified.sort((a, b) => a.x - b.x)
       setBladePoints(simplified)
     } else if (isDrawing && rawPointsRef.current.length > 0) {
-      // Just a click — add single point
       const pts = [...useTurbineStore.getState().bladePoints, ...rawPointsRef.current]
       const sorted = pts.sort((a, b) => a.x - b.x)
       setBladePoints(sorted)
@@ -338,6 +326,11 @@ export default function KaleidoscopeCanvas() {
     const px = getCanvasCoords(e, canvas)
     if (px) handleMove(px)
   }, [getCanvasCoords, handleMove])
+
+  const handlePointerLeave = useCallback(() => {
+    mousePxRef.current = null
+    handleUp()
+  }, [handleUp])
 
   const handlePointerUp = useCallback(() => handleUp(), [handleUp])
 
@@ -506,7 +499,7 @@ export default function KaleidoscopeCanvas() {
         ctx.stroke()
       }
 
-      // Radial lines
+      // Radial lines (one per blade)
       ctx.strokeStyle = 'rgba(45, 212, 191, 0.06)'
       for (let i = 0; i < bc; i++) {
         const angle = (i / bc) * Math.PI * 2
@@ -516,12 +509,37 @@ export default function KaleidoscopeCanvas() {
         ctx.stroke()
       }
 
-      // Draw mirrored blades (smooth spline, NO zig-zag)
       if (pts.length >= 2) {
         const smooth = catmullRomSpline(pts, cs)
         const mirrored = mirrorPoints(smooth, bc, cx, cy, radius)
 
-        // Glow layer
+        // ── Filled blade area (swept petal shape per blade) ──────────────────
+        mirrored.forEach((blade, idx) => {
+          if (blade.length < 2) return
+
+          // Build closed petal: curve out → radial line back to center
+          const isFirst = idx === 0
+          const angle = (idx / bc) * Math.PI * 2
+          const edgeX = cx + Math.cos(angle) * radius
+          const edgeY = cy + Math.sin(angle) * radius
+
+          ctx.beginPath()
+          ctx.moveTo(cx, cy)
+          for (let i = 0; i < blade.length; i++) {
+            ctx.lineTo(blade[i].x, blade[i].y)
+          }
+          // Close back along the radial baseline
+          ctx.lineTo(edgeX, edgeY)
+          ctx.closePath()
+
+          // Fill: primary blade brighter, others dimmer
+          const fillAlpha = isFirst ? 0.13 : 0.06
+          const hue = 174 + idx * (30 / bc)
+          ctx.fillStyle = `hsla(${hue}, 65%, 55%, ${fillAlpha})`
+          ctx.fill()
+        })
+
+        // ── Glow pass ──────────────────────────────────────────────────────
         mirrored.forEach((blade) => {
           if (blade.length < 2) return
           ctx.beginPath()
@@ -529,14 +547,14 @@ export default function KaleidoscopeCanvas() {
           for (let i = 1; i < blade.length; i++) {
             ctx.lineTo(blade[i].x, blade[i].y)
           }
-          ctx.strokeStyle = 'rgba(45, 212, 191, 0.15)'
-          ctx.lineWidth = 6
+          ctx.strokeStyle = 'rgba(45, 212, 191, 0.12)'
+          ctx.lineWidth = 8
           ctx.lineCap = 'round'
           ctx.lineJoin = 'round'
           ctx.stroke()
         })
 
-        // Main blade lines
+        // ── Main blade lines (first blade brighter/thicker) ────────────────
         mirrored.forEach((blade, idx) => {
           if (blade.length < 2) return
           ctx.beginPath()
@@ -547,56 +565,126 @@ export default function KaleidoscopeCanvas() {
           const tier = store.bloomTier
           const alpha = tier === 'radiant' ? 0.95 : tier === 'flourishing' ? 0.85 : 0.7
           const hue = 174 + idx * (30 / bc)
-          ctx.strokeStyle = `hsla(${hue}, 70%, 55%, ${alpha})`
-          ctx.lineWidth = 2.5
+          // Primary blade (idx=0) gets extra thickness + brightness
+          const isFirst = idx === 0
+          ctx.strokeStyle = `hsla(${hue}, 70%, ${isFirst ? 65 : 55}%, ${isFirst ? Math.min(1, alpha + 0.2) : alpha})`
+          ctx.lineWidth = isFirst ? 3 : 2
           ctx.lineCap = 'round'
           ctx.lineJoin = 'round'
           ctx.stroke()
+
+          // Extra bright inner stroke for primary blade
+          if (isFirst) {
+            ctx.beginPath()
+            ctx.moveTo(blade[0].x, blade[0].y)
+            for (let i = 1; i < blade.length; i++) {
+              ctx.lineTo(blade[i].x, blade[i].y)
+            }
+            ctx.strokeStyle = 'rgba(94, 234, 212, 0.35)'
+            ctx.lineWidth = 1
+            ctx.stroke()
+          }
         })
 
-        // Control points — just dots, NO dashed connecting lines
+        // ── Control points with hover effects ──────────────────────────────
+        const mpx = mousePxRef.current
         pts.forEach((pt, i) => {
           const worldX = cx + pt.x * radius
           const worldY = cy + pt.y * radius
 
-          // Outer glow
+          // Check if hovered
+          let isHovered = false
+          if (mpx) {
+            const dx = mpx.x - worldX
+            const dy = mpx.y - worldY
+            isHovered = Math.sqrt(dx * dx + dy * dy) < 18
+          }
+          const isDragged = dragIndexRef.current === i
+
+          // Outer glow (larger on hover/drag)
+          const glowR = isDragged ? 16 : isHovered ? 14 : 8
+          const glowAlpha = isDragged ? 0.45 : isHovered ? 0.35 : 0.2
+          const glowGrad = ctx.createRadialGradient(worldX, worldY, 0, worldX, worldY, glowR)
+          const glowColor = i === 0 ? '251, 191, 36' : '45, 212, 191'
+          glowGrad.addColorStop(0, `rgba(${glowColor}, ${glowAlpha})`)
+          glowGrad.addColorStop(1, `rgba(${glowColor}, 0)`)
           ctx.beginPath()
-          ctx.arc(worldX, worldY, 8, 0, Math.PI * 2)
-          ctx.fillStyle = 'rgba(45, 212, 191, 0.2)'
+          ctx.arc(worldX, worldY, glowR, 0, Math.PI * 2)
+          ctx.fillStyle = glowGrad
           ctx.fill()
 
-          // Inner dot
+          // Inner dot (larger on hover)
+          const dotR = isDragged ? 6 : isHovered ? 5.5 : 4
           ctx.beginPath()
-          ctx.arc(worldX, worldY, 4, 0, Math.PI * 2)
+          ctx.arc(worldX, worldY, dotR, 0, Math.PI * 2)
           ctx.fillStyle = i === 0 ? '#fbbf24' : '#2dd4bf'
           ctx.fill()
+
+          // Crosshair ring on hover
+          if (isHovered || isDragged) {
+            ctx.beginPath()
+            ctx.arc(worldX, worldY, dotR + 3, 0, Math.PI * 2)
+            ctx.strokeStyle = i === 0 ? 'rgba(251,191,36,0.5)' : 'rgba(45,212,191,0.5)'
+            ctx.lineWidth = 1
+            ctx.stroke()
+          }
+
+          // Index label for first point
+          if (i === 0) {
+            ctx.font = '9px monospace'
+            ctx.fillStyle = 'rgba(251,191,36,0.7)'
+            ctx.textAlign = 'center'
+            ctx.fillText('●', worldX, worldY - 12)
+            ctx.textAlign = 'left'
+          }
         })
       }
 
-      // Live preview of freehand drawing in progress (smooth line)
+      // ── Live freehand preview ──────────────────────────────────────────────
       const rawPreview = rawPixelPreviewRef.current
       if (rawPreview.length >= 2) {
+        // Glow behind drawing stroke
         ctx.beginPath()
         ctx.moveTo(rawPreview[0].x, rawPreview[0].y)
         for (let i = 1; i < rawPreview.length; i++) {
           ctx.lineTo(rawPreview[i].x, rawPreview[i].y)
         }
-        ctx.strokeStyle = 'rgba(251, 191, 36, 0.6)'
-        ctx.lineWidth = 2
+        ctx.strokeStyle = 'rgba(251, 191, 36, 0.15)'
+        ctx.lineWidth = 8
         ctx.lineCap = 'round'
         ctx.lineJoin = 'round'
-        ctx.setLineDash([4, 4])
+        ctx.stroke()
+
+        // Main drawing stroke
+        ctx.beginPath()
+        ctx.moveTo(rawPreview[0].x, rawPreview[0].y)
+        for (let i = 1; i < rawPreview.length; i++) {
+          ctx.lineTo(rawPreview[i].x, rawPreview[i].y)
+        }
+        ctx.strokeStyle = 'rgba(251, 191, 36, 0.85)'
+        ctx.lineWidth = 2.5
+        ctx.lineCap = 'round'
+        ctx.lineJoin = 'round'
+        ctx.setLineDash([5, 3])
         ctx.stroke()
         ctx.setLineDash([])
+
+        // Tip cursor dot
+        const tip = rawPreview[rawPreview.length - 1]
+        ctx.beginPath()
+        ctx.arc(tip.x, tip.y, 4, 0, Math.PI * 2)
+        ctx.fillStyle = '#fbbf24'
+        ctx.fill()
       }
 
-      // Center hub
-      const hubGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 12)
-      hubGrad.addColorStop(0, 'rgba(45, 212, 191, 0.6)')
+      // ── Center hub ────────────────────────────────────────────────────────
+      const hubGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 14)
+      hubGrad.addColorStop(0, 'rgba(45, 212, 191, 0.7)')
+      hubGrad.addColorStop(0.5, 'rgba(45, 212, 191, 0.2)')
       hubGrad.addColorStop(1, 'rgba(45, 212, 191, 0)')
       ctx.fillStyle = hubGrad
       ctx.beginPath()
-      ctx.arc(cx, cy, 12, 0, Math.PI * 2)
+      ctx.arc(cx, cy, 14, 0, Math.PI * 2)
       ctx.fill()
 
       ctx.fillStyle = '#2dd4bf'
@@ -604,7 +692,7 @@ export default function KaleidoscopeCanvas() {
       ctx.arc(cx, cy, 3, 0, Math.PI * 2)
       ctx.fill()
 
-      // Bloom tier indicator ring
+      // ── Bloom tier indicator ring ─────────────────────────────────────────
       const tier = store.bloomTier
       const tierColors: Record<string, string> = {
         dormant: 'rgba(100, 116, 139, 0.2)',
@@ -618,6 +706,17 @@ export default function KaleidoscopeCanvas() {
       ctx.strokeStyle = tierColors[tier] || tierColors.dormant
       ctx.lineWidth = 2
       ctx.stroke()
+
+      // Outer decoration ring for radiant tier
+      if (tier === 'radiant') {
+        ctx.beginPath()
+        ctx.arc(cx, cy, radius * (pulseScale + 0.025), 0, Math.PI * 2)
+        ctx.strokeStyle = 'rgba(244,114,182,0.15)'
+        ctx.lineWidth = 1
+        ctx.setLineDash([4, 8])
+        ctx.stroke()
+        ctx.setLineDash([])
+      }
 
       // Point count warning
       if (pts.length >= MAX_POINTS) {
@@ -651,7 +750,7 @@ export default function KaleidoscopeCanvas() {
         onMouseDown={handlePointerDown}
         onMouseMove={handlePointerMove}
         onMouseUp={handlePointerUp}
-        onMouseLeave={handlePointerUp}
+        onMouseLeave={handlePointerLeave}
         onContextMenu={handleContextMenu}
       />
 
@@ -713,12 +812,13 @@ export default function KaleidoscopeCanvas() {
           ◇ 3D Preview
         </button>
         {showMiniPreview && (
-          <div className="rounded-xl overflow-hidden shadow-2xl border border-teal/20">
+          <div className="shadow-2xl">
             <MiniTurbineViewer />
           </div>
         )}
       </div>
-      {/* Undo/Redo buttons */}
+
+      {/* Undo/Redo buttons — top right */}
       <div className="absolute top-3 right-3 flex gap-1.5">
         <button
           onClick={() => undo()}

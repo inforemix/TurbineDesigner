@@ -1,4 +1,4 @@
-import { useRef, useMemo, useCallback } from 'react'
+import { useRef, useMemo, useCallback, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, ContactShadows, Float } from '@react-three/drei'
 import * as THREE from 'three'
@@ -9,12 +9,71 @@ import { catmullRomSpline } from '../../utils/spline'
 function easeOutCubic(t: number) { return 1 - Math.pow(1 - t, 3) }
 function easeOutBack(t: number) { const c1 = 1.70158; const c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2) }
 
+// ── GLSL Neon Shader ─────────────────────────────────────────────────────────
+const NEON_VERT = /* glsl */`
+  varying vec3 vWorldNormal;
+  varying vec3 vWorldPosition;
+  varying float vHeight;
+
+  void main() {
+    vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
+    vec4 worldPos = modelMatrix * vec4(position, 1.0);
+    vWorldPosition = worldPos.xyz;
+    vHeight = position.y;
+    gl_Position = projectionMatrix * viewMatrix * worldPos;
+  }
+`
+
+const NEON_FRAG = /* glsl */`
+  uniform float uTime;
+  uniform vec3 uColorA;
+  uniform vec3 uColorB;
+  uniform vec3 uRimColor;
+
+  varying vec3 vWorldNormal;
+  varying vec3 vWorldPosition;
+  varying float vHeight;
+
+  void main() {
+    vec3 viewDir = normalize(cameraPosition - vWorldPosition);
+    vec3 norm = normalize(vWorldNormal);
+
+    // Fresnel rim
+    float fresnel = 1.0 - abs(dot(norm, viewDir));
+    fresnel = pow(fresnel, 1.8);
+
+    // Height gradient (0 = root, 1 = tip)
+    float h = clamp(vHeight * 0.55, 0.0, 1.0);
+    vec3 baseColor = mix(uColorA, uColorB, h);
+
+    // Animated energy pulse along height
+    float pulse = sin(vHeight * 8.0 - uTime * 2.5) * 0.5 + 0.5;
+    float pulse2 = sin(vHeight * 4.0 + uTime * 1.2) * 0.5 + 0.5;
+
+    // Face diffuse based on normal direction
+    float diffuse = abs(dot(norm, normalize(vec3(1.0, 1.5, 0.8)))) * 0.5 + 0.5;
+
+    // Compose
+    vec3 finalColor = baseColor * diffuse * 0.35;
+    finalColor += uRimColor * fresnel * 1.8;
+    finalColor += baseColor * pulse * 0.18;
+    finalColor += uRimColor * pulse2 * fresnel * 0.4;
+
+    // Clamp brightness
+    finalColor = min(finalColor, vec3(1.5));
+
+    float alpha = 0.82 + fresnel * 0.18;
+    gl_FragColor = vec4(finalColor, alpha);
+  }
+`
+
 function TurbineMesh() {
   const groupRef = useRef<THREE.Group>(null)
   const shaftRef = useRef<THREE.Mesh>(null)
   const bladeRefs = useRef<(THREE.Mesh | null)[]>([])
   const strutGroupRef = useRef<THREE.Group>(null)
   const spinRef = useRef(0)
+  const shaderTimeRef = useRef(0)
 
   // Per-part reveal progress (0→1)
   const shaftReveal = useRef(0)
@@ -28,7 +87,8 @@ function TurbineMesh() {
     chordCurve, twistCurve, bladeSections,
   } = useTurbineStore()
 
-  const matConfig = MATERIAL_PRESETS[materialPreset]
+  const matConfig = MATERIAL_PRESETS[materialPreset === 'neon-shader' ? 'teal-metal' : materialPreset]
+  const isNeonShader = materialPreset === 'neon-shader'
 
   // Build geometry from blade curve
   const meshData = useMemo(() => {
@@ -50,11 +110,9 @@ function TurbineMesh() {
         const hFrac = h / heightSegments
         const y = height * 0.25 + hFrac * height * 0.8
 
-        // Interpolate section twist/taper from bladeSections
         let sectionTwistOffset = 0
         let sectionTaperScale = 1.0
         if (bladeSections.length >= 2) {
-          // Find bracketing sections
           let lo = 0
           for (let s = 0; s < bladeSections.length - 1; s++) {
             if (bladeSections[s + 1].heightFraction >= hFrac) { lo = s; break }
@@ -72,7 +130,6 @@ function TurbineMesh() {
         const twistAngle = (twist * hFrac + sectionTwistOffset) * (Math.PI / 180)
         const taperScale = (1.0 - taper * Math.abs(hFrac - 0.5) * 2) * sectionTaperScale
 
-        // Helical: add progressive angular offset per height slice
         const helicalOffset = isHelical ? hFrac * Math.PI * 0.5 : 0
 
         for (let c = 0; c < curveSegments; c++) {
@@ -107,19 +164,38 @@ function TurbineMesh() {
     return bladeGeometries
   }, [bladePoints, bladeCount, height, twist, taper, thickness, symmetryMode, curveSmoothing, chordCurve, twistCurve])
 
+  // Neon shader material uniforms
+  const neonUniforms = useMemo(() => ({
+    uTime: { value: 0 },
+    uColorA: { value: new THREE.Color('#0d5c63') },
+    uColorB: { value: new THREE.Color('#7c3aed') },
+    uRimColor: { value: new THREE.Color('#2dd4bf') },
+  }), [])
+
   // Materials
-  const bladeMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
-    color: matConfig.color,
-    metalness: matConfig.metalness,
-    roughness: matConfig.roughness,
-    opacity: matConfig.opacity,
-    transparent: matConfig.transparent,
-    emissive: matConfig.emissiveIntensity > 0 ? matConfig.color : '#000000',
-    emissiveIntensity: matConfig.emissiveIntensity,
-    side: THREE.DoubleSide,
-    clearcoat: materialPreset === 'carbon-fiber' ? 0.8 : 0,
-    clearcoatRoughness: 0.2,
-  }), [matConfig, materialPreset])
+  const bladeMaterial = useMemo(() => {
+    if (isNeonShader) {
+      return new THREE.ShaderMaterial({
+        uniforms: neonUniforms,
+        vertexShader: NEON_VERT,
+        fragmentShader: NEON_FRAG,
+        side: THREE.DoubleSide,
+        transparent: true,
+      })
+    }
+    return new THREE.MeshPhysicalMaterial({
+      color: matConfig.color,
+      metalness: matConfig.metalness,
+      roughness: matConfig.roughness,
+      opacity: matConfig.opacity,
+      transparent: matConfig.transparent,
+      emissive: matConfig.emissiveIntensity > 0 ? matConfig.color : '#000000',
+      emissiveIntensity: matConfig.emissiveIntensity,
+      side: THREE.DoubleSide,
+      clearcoat: materialPreset === 'carbon-fiber' ? 0.8 : 0,
+      clearcoatRoughness: 0.2,
+    })
+  }, [matConfig, materialPreset, isNeonShader, neonUniforms])
 
   const wireframeMaterial = useMemo(() => new THREE.MeshBasicMaterial({
     color: '#2dd4bf',
@@ -142,15 +218,19 @@ function TurbineMesh() {
   useFrame((_, delta) => {
     if (!groupRef.current) return
 
+    // Update neon shader time
+    if (isNeonShader) {
+      shaderTimeRef.current += delta
+      neonUniforms.uTime.value = shaderTimeRef.current
+    }
+
     // Staggered reveal animation
     if (isTransitioning || transitionProgress < 1) {
-      const tp = transitionProgress // 0→1
+      const tp = transitionProgress
 
-      // Shaft: first 0→0.5 of transition
       const shaftT = Math.max(0, Math.min(1, tp / 0.5))
       shaftReveal.current = easeOutCubic(shaftT)
 
-      // Blades: stagger across 0.2→0.85
       for (let i = 0; i < bladeCount; i++) {
         const start = 0.2 + i * (0.55 / Math.max(1, bladeCount))
         const end = start + 0.3
@@ -158,39 +238,32 @@ function TurbineMesh() {
         bladeReveals.current[i] = easeOutBack(bladeT)
       }
 
-      // Struts: last 30% of transition
       const strutT = Math.max(0, Math.min(1, (tp - 0.7) / 0.3))
       strutReveal.current = easeOutBack(strutT)
 
-      // Wireframe: fades in then out over first 50% of each part's reveal
       wireframeOpacity.current = tp < 0.5 ? Math.sin(tp * Math.PI) * 0.7 : 0
 
-      // Apply to shaft
       if (shaftRef.current) {
         const s = shaftReveal.current
         shaftRef.current.scale.setScalar(Math.max(0.001, s))
         shaftRef.current.position.y = (1 - s) * -0.3
       }
 
-      // Apply to blades
       bladeRefs.current.forEach((mesh, i) => {
         if (!mesh) return
         const s = bladeReveals.current[i] ?? 0
         mesh.scale.setScalar(Math.max(0.001, s))
       })
 
-      // Apply to struts
       if (strutGroupRef.current) {
         const s = strutReveal.current
         strutGroupRef.current.scale.setScalar(Math.max(0.001, s))
         strutGroupRef.current.position.y = (1 - s) * -0.2
       }
 
-      // Wireframe effect on blades
       wireframeMaterial.opacity = wireframeOpacity.current
 
     } else {
-      // Fully revealed — reset all
       if (shaftRef.current) {
         shaftRef.current.scale.setScalar(1)
         shaftRef.current.position.y = 0
@@ -230,7 +303,7 @@ function TurbineMesh() {
             geometry={geo}
             material={bladeMaterial}
           />
-          <mesh geometry={geo} material={wireframeMaterial} />
+          {!isNeonShader && <mesh geometry={geo} material={wireframeMaterial} />}
         </group>
       ))}
 
@@ -273,13 +346,11 @@ function BloomTransitionOverlay() {
     const scanMat = scanRef.current.material as THREE.MeshBasicMaterial
 
     if (isTransitioning) {
-      // Flash then fade
       const flash = transitionProgress < 0.3
         ? transitionProgress / 0.3
         : 1 - ((transitionProgress - 0.3) / 0.7)
       mat.opacity = Math.max(0, flash * 0.25)
 
-      // Scan line sweeps up during first 60% of transition
       if (transitionProgress < 0.6) {
         const scanProg = transitionProgress / 0.6
         const scanY = -viewport.height / 2 + scanProg * viewport.height * 1.2
@@ -300,7 +371,6 @@ function BloomTransitionOverlay() {
         <planeGeometry args={[viewport.width * 2, viewport.height * 2]} />
         <meshBasicMaterial color="#2dd4bf" transparent opacity={0} depthTest={false} />
       </mesh>
-      {/* Horizontal scan line */}
       <mesh ref={scanRef} position={[0, -viewport.height / 2, -0.5]}>
         <planeGeometry args={[viewport.width * 2, 0.04]} />
         <meshBasicMaterial color="#5eead4" transparent opacity={0} depthTest={false} />
@@ -416,6 +486,29 @@ function CanvasRefCapture({ onCanvas }: { onCanvas: (c: HTMLCanvasElement) => vo
   return null
 }
 
+// ── Smart OrbitControls: pause auto-rotate while dragging ─────────────────────
+function SmartOrbitControls({ isTransitioning }: { isTransitioning: boolean }) {
+  const [isDragging, setIsDragging] = useState(false)
+  const { height } = useTurbineStore()
+  const target: [number, number, number] = [0, height * 0.65, 0]
+
+  return (
+    <OrbitControls
+      enableDamping
+      dampingFactor={0.05}
+      minDistance={1}
+      maxDistance={6}
+      target={target}
+      maxPolarAngle={Math.PI / 2 + 0.3}
+      autoRotate={!isDragging}
+      autoRotateSpeed={0.5}
+      enabled={!isTransitioning}
+      onStart={() => setIsDragging(true)}
+      onEnd={() => setIsDragging(false)}
+    />
+  )
+}
+
 export default function TurbineViewer() {
   const { bloomTier, isTransitioning } = useTurbineStore()
   const { theme } = useThemeStore()
@@ -455,10 +548,8 @@ export default function TurbineViewer() {
         <SceneCapture />
         <CanvasRefCapture onCanvas={handleCanvas} />
 
-        {/* Cinematic camera fly-in */}
         <CinematicCamera />
 
-        {/* Lighting */}
         <ambientLight intensity={0.3} />
         <directionalLight position={[3, 5, 2]} intensity={1.2} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
         <pointLight position={[-2, 3, -1]} intensity={0.4} color="#5eead4" />
@@ -473,17 +564,7 @@ export default function TurbineViewer() {
         <GroundPlane />
         <ContactShadows position={[0, 0, 0]} opacity={0.4} scale={5} blur={2.5} far={3} />
 
-        <OrbitControls
-          enableDamping
-          dampingFactor={0.05}
-          minDistance={1}
-          maxDistance={6}
-          target={[0, 0.8, 0]}
-          maxPolarAngle={Math.PI / 2 + 0.3}
-          autoRotate
-          autoRotateSpeed={0.5}
-          enabled={!isTransitioning}
-        />
+        <SmartOrbitControls isTransitioning={isTransitioning} />
       </Canvas>
     </div>
   )

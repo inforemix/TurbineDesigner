@@ -1,14 +1,13 @@
 import { useRef, useMemo } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { Canvas } from '@react-three/fiber'
+import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import { useTurbineStore, MATERIAL_PRESETS } from '../../stores/turbineStore'
 import { catmullRomSpline } from '../../utils/spline'
 
 function MiniTurbineMesh() {
-  const groupRef = useRef<THREE.Group>(null)
-  const spinRef = useRef(0)
   const { bladePoints, bladeCount, height, twist, taper, symmetryMode, materialPreset, curveSmoothing } = useTurbineStore()
-  const matConfig = MATERIAL_PRESETS[materialPreset]
+  const matConfig = MATERIAL_PRESETS[materialPreset === 'neon-shader' ? 'teal-metal' : materialPreset]
 
   const meshData = useMemo(() => {
     if (bladePoints.length < 2) return null
@@ -52,7 +51,7 @@ function MiniTurbineMesh() {
       geo.rotateY((b / bladeCount) * Math.PI * 2)
       geos.push(geo)
     }
-    return geos
+    return { geos, turbineHeight: height }
   }, [bladePoints, bladeCount, height, twist, taper, symmetryMode, curveSmoothing])
 
   const bladeMat = useMemo(() => new THREE.MeshPhysicalMaterial({
@@ -66,44 +65,75 @@ function MiniTurbineMesh() {
 
   const strutMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#64748b', metalness: 0.7, roughness: 0.3 }), [])
 
-  useFrame((_, delta) => {
-    if (!groupRef.current) return
-    spinRef.current += delta * 0.8
-    groupRef.current.rotation.y = spinRef.current
-  })
-
   if (!meshData) return null
+  const { geos, turbineHeight } = meshData
 
   return (
-    <group ref={groupRef}>
-      <mesh position={[0, height * 0.65, 0]} material={strutMat}>
-        <cylinderGeometry args={[0.04, 0.04, height * 1.3, 8]} />
+    <group>
+      <mesh position={[0, turbineHeight * 0.65, 0]} material={strutMat}>
+        <cylinderGeometry args={[0.04, 0.04, turbineHeight * 1.3, 8]} />
       </mesh>
-      {meshData.map((geo, i) => (
+      {geos.map((geo, i) => (
         <mesh key={i} geometry={geo} material={bladeMat} />
       ))}
-      <mesh position={[0, height * 1.05, 0]} rotation={[Math.PI / 2, 0, 0]} material={strutMat}>
+      <mesh position={[0, turbineHeight * 1.05, 0]} rotation={[Math.PI / 2, 0, 0]} material={strutMat}>
         <torusGeometry args={[0.18, 0.012, 6, 20]} />
       </mesh>
     </group>
   )
 }
 
+function MiniSceneControls() {
+  const { height } = useTurbineStore()
+  const target: [number, number, number] = [0, height * 0.65, 0]
+
+  return (
+    <OrbitControls
+      enableDamping
+      dampingFactor={0.1}
+      minDistance={0.6}
+      maxDistance={3.5}
+      target={target}
+      maxPolarAngle={Math.PI / 2 + 0.3}
+      autoRotate
+      autoRotateSpeed={1.2}
+      enableZoom
+      enablePan={false}
+    />
+  )
+}
+
 export default function MiniTurbineViewer() {
+  const containerRef = useRef<HTMLDivElement>(null)
+
   return (
     <div
-      className="rounded-xl overflow-hidden border border-border/30"
-      style={{ width: 180, height: 180, background: '#0a0e1a' }}
+      ref={containerRef}
+      className="rounded-xl overflow-hidden border border-teal/20 relative select-none"
+      style={{ width: 200, height: 200, background: '#0a0e1a', cursor: 'grab' }}
     >
       <Canvas
         camera={{ position: [1.4, 1.2, 1.4], fov: 45 }}
-        gl={{ antialias: false, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.2 }}
+        gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.2 }}
       >
+        <color attach="background" args={['#0a0e1a']} />
         <ambientLight intensity={0.4} />
         <directionalLight position={[2, 3, 1]} intensity={1.0} />
         <pointLight position={[-1, 2, -1]} intensity={0.3} color="#5eead4" />
+        <pointLight position={[1, 0.5, 1]} intensity={0.15} color="#a78bfa" />
         <MiniTurbineMesh />
+        <MiniSceneControls />
       </Canvas>
+
+      {/* Corner label */}
+      <div className="absolute top-1.5 left-2 text-[8px] text-teal/40 pointer-events-none font-mono tracking-widest uppercase">
+        3D
+      </div>
+
+      {/* Bottom hint */}
+      <div className="absolute bottom-1 left-0 right-0 flex items-center justify-center pointer-events-none">
+        <span className="text-[7px] text-teal/30 tracking-wider">drag to orbit · scroll zoom</span>
+      </div>
     </div>
   )
 }
