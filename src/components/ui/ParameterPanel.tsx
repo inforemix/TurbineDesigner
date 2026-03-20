@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useTurbineStore, type BloomTier, type SymmetryMode, type MaterialPreset, MATERIAL_PRESETS, type NeonPattern } from '../../stores/turbineStore'
+import { useTurbineStore, type BloomTier, type SymmetryMode, type MaterialPreset, MATERIAL_PRESETS, type NeonPattern, type MaterialConfig } from '../../stores/turbineStore'
 import DistributionEditor from './DistributionEditor'
 import { Slider } from './slider'
 import { Button } from './button'
@@ -107,6 +107,7 @@ export default function ParameterPanel() {
     isSpinning, setIsSpinning,
     symmetryMode, setSymmetryMode,
     materialPreset, setMaterialPreset,
+    materialOverrides, setMaterialOverride, resetMaterialOverride,
     neonConfig, setNeonConfig,
     curveSmoothing, setCurveSmoothing,
     mode,
@@ -296,6 +297,8 @@ export default function ParameterPanel() {
               {MATERIAL_KEYS.map((key) => {
                 const mat = MATERIAL_PRESETS[key]
                 const isNeon = key === 'neon-shader'
+                const ov = materialOverrides[key] ?? {}
+                const swatchColor = ov.color ?? mat.color
                 return (
                   <button
                     key={key}
@@ -311,7 +314,7 @@ export default function ParameterPanel() {
                         style={{ background: `linear-gradient(135deg, ${neonConfig.colorA}, ${neonConfig.rimColor})` }} />
                     ) : (
                       <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-white/10"
-                        style={{ background: mat.color }} />
+                        style={{ background: swatchColor }} />
                     )}
                     {mat.label}
                   </button>
@@ -319,12 +322,66 @@ export default function ParameterPanel() {
               })}
             </div>
 
-            {/* Neon Shader config — only shown when neon is active */}
+            {/* ── Material config panel — shown for the active preset ── */}
+            {materialPreset !== 'neon-shader' && (() => {
+              const base = MATERIAL_PRESETS[materialPreset]
+              const ov = materialOverrides[materialPreset] ?? {}
+              const eff: MaterialConfig = { ...base, ...ov }
+              const hasOverride = Object.keys(ov).length > 0
+              const set = (p: Partial<MaterialConfig>) => setMaterialOverride(materialPreset, p)
+              return (
+                <div className="flex flex-col gap-3 p-3 rounded-xl border border-teal/15 bg-teal/5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] uppercase tracking-widest text-teal/70 font-semibold">{base.label} Config</span>
+                    {hasOverride && (
+                      <button onClick={() => resetMaterialOverride(materialPreset)}
+                        className="text-[8px] text-text-muted hover:text-amber-400 transition-colors">
+                        Reset
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Color pickers row */}
+                  <div className="flex gap-2">
+                    <label className="flex flex-col items-center gap-1 cursor-pointer flex-1">
+                      <div className="relative w-full h-7 rounded-lg overflow-hidden border border-white/10" style={{ background: eff.color }}>
+                        <input type="color" value={eff.color} onChange={e => set({ color: e.target.value })}
+                          className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+                      </div>
+                      <span className="text-[8px] text-text-muted">Color</span>
+                    </label>
+                    {eff.emissiveIntensity > 0 && (
+                      <label className="flex flex-col items-center gap-1 cursor-pointer flex-1">
+                        <div className="relative w-full h-7 rounded-lg overflow-hidden border border-white/10"
+                          style={{ background: eff.emissiveColor ?? eff.color }}>
+                          <input type="color" value={eff.emissiveColor ?? eff.color}
+                            onChange={e => set({ emissiveColor: e.target.value })}
+                            className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+                        </div>
+                        <span className="text-[8px] text-text-muted">Emissive</span>
+                      </label>
+                    )}
+                  </div>
+
+                  {/* Sliders */}
+                  <ParamSlider label="Metalness"  value={eff.metalness}  min={0} max={1}   step={0.01} onChange={v => set({ metalness: v })} />
+                  <ParamSlider label="Roughness"  value={eff.roughness}  min={0} max={1}   step={0.01} onChange={v => set({ roughness: v })} />
+                  <ParamSlider label="Opacity"    value={eff.opacity}    min={0.05} max={1} step={0.01} onChange={v => set({ opacity: v, transparent: v < 1 })} />
+                  {(eff.clearcoat ?? 0) >= 0 && materialPreset === 'carbon-fiber' && (
+                    <ParamSlider label="Clearcoat" value={eff.clearcoat ?? 0} min={0} max={1} step={0.01} onChange={v => set({ clearcoat: v })} />
+                  )}
+                  {eff.emissiveIntensity > 0 && (
+                    <ParamSlider label="Emit Intensity" value={eff.emissiveIntensity} min={0} max={1} step={0.01} onChange={v => set({ emissiveIntensity: v })} />
+                  )}
+                </div>
+              )
+            })()}
+
+            {/* Neon Shader config */}
             {materialPreset === 'neon-shader' && (
               <div className="flex flex-col gap-3 p-3 rounded-xl border border-violet-400/20 bg-violet-500/5">
                 <div className="text-[9px] uppercase tracking-widest text-violet-400 font-semibold">Neon Config</div>
 
-                {/* Color pickers */}
                 <div className="flex gap-2">
                   {([
                     { key: 'colorA',   label: 'Base' },
@@ -334,47 +391,35 @@ export default function ParameterPanel() {
                     <label key={key} className="flex flex-col items-center gap-1 cursor-pointer flex-1">
                       <div className="relative w-full h-7 rounded-lg overflow-hidden border border-white/10"
                         style={{ background: neonConfig[key] }}>
-                        <input
-                          type="color"
-                          value={neonConfig[key]}
+                        <input type="color" value={neonConfig[key]}
                           onChange={e => setNeonConfig({ [key]: e.target.value })}
-                          className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
-                        />
+                          className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
                       </div>
                       <span className="text-[8px] text-text-muted">{label}</span>
                     </label>
                   ))}
                 </div>
 
-                {/* Pattern selector */}
                 <div className="flex flex-col gap-1.5">
                   <span className="text-[9px] text-text-muted uppercase tracking-wider">Pattern</span>
                   <div className="grid grid-cols-5 gap-1">
                     {(['Wave','Scan','Grid','Hex','Circuit'] as const).map((name, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => setNeonConfig({ pattern: idx as NeonPattern })}
+                      <button key={idx} onClick={() => setNeonConfig({ pattern: idx as NeonPattern })}
                         className={`py-1 rounded-md text-[8px] font-medium transition-all border ${
                           neonConfig.pattern === idx
                             ? 'border-violet-400/60 bg-violet-500/25 text-violet-300'
                             : 'border-border/30 bg-surface/50 text-text-muted hover:border-violet-400/30 hover:text-violet-400'
-                        }`}
-                      >
+                        }`}>
                         {name}
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {/* Sliders */}
-                <ParamSlider label="Pulse Speed" value={neonConfig.pulseSpeed}
-                  min={0} max={8} step={0.1} onChange={v => setNeonConfig({ pulseSpeed: v })} />
-                <ParamSlider label="Frequency"   value={neonConfig.pulseFreq}
-                  min={1} max={24} step={0.5} onChange={v => setNeonConfig({ pulseFreq: v })} />
-                <ParamSlider label="Glow Edge"   value={neonConfig.fresnelPower}
-                  min={0.5} max={5} step={0.1} onChange={v => setNeonConfig({ fresnelPower: v })} />
-                <ParamSlider label="Opacity"     value={neonConfig.opacity}
-                  min={0.1} max={1} step={0.01} onChange={v => setNeonConfig({ opacity: v })} />
+                <ParamSlider label="Pulse Speed" value={neonConfig.pulseSpeed}  min={0} max={8}   step={0.1}  onChange={v => setNeonConfig({ pulseSpeed: v })} />
+                <ParamSlider label="Frequency"   value={neonConfig.pulseFreq}   min={1} max={24}  step={0.5}  onChange={v => setNeonConfig({ pulseFreq: v })} />
+                <ParamSlider label="Glow Edge"   value={neonConfig.fresnelPower} min={0.5} max={5} step={0.1} onChange={v => setNeonConfig({ fresnelPower: v })} />
+                <ParamSlider label="Opacity"     value={neonConfig.opacity}     min={0.1} max={1}  step={0.01} onChange={v => setNeonConfig({ opacity: v })} />
               </div>
             )}
           </div>

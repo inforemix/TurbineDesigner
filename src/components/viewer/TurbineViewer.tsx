@@ -1,8 +1,8 @@
 import { useRef, useMemo, useCallback, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { OrbitControls, ContactShadows, Float } from '@react-three/drei'
+import { OrbitControls, ContactShadows, Float, Sky } from '@react-three/drei'
 import * as THREE from 'three'
-import { useTurbineStore, MATERIAL_PRESETS } from '../../stores/turbineStore'
+import { useTurbineStore, MATERIAL_PRESETS, type MaterialPreset } from '../../stores/turbineStore'
 import { useThemeStore } from '../../stores/themeStore'
 import { catmullRomSplineWithHandles } from '../../utils/spline'
 import { resolveProfileData, halfThickNorm } from '../../utils/airfoil'
@@ -144,14 +144,16 @@ function TurbineMesh() {
 
   const {
     bladePoints, bladeHandles, bladeCount, height, twist, taper, thickness,
-    windSpeed, isSpinning, symmetryMode, materialPreset, isTransitioning, transitionProgress, curveSmoothing,
+    windSpeed, isSpinning, symmetryMode, materialPreset, materialOverrides,
+    isTransitioning, transitionProgress, curveSmoothing,
     chordCurve, twistCurve, bladeSections,
     airfoilPreset, customNacaM, customNacaP, customNacaT,
     neonConfig,
   } = useTurbineStore()
 
-  const matConfig = MATERIAL_PRESETS[materialPreset === 'neon-shader' ? 'teal-metal' : materialPreset]
   const isNeonShader = materialPreset === 'neon-shader'
+  const basePreset = isNeonShader ? 'teal-metal' : materialPreset
+  const matConfig = { ...MATERIAL_PRESETS[basePreset as MaterialPreset], ...(materialOverrides[materialPreset] ?? {}) }
 
   // Build geometry from blade curve — closed airfoil cross-section
   const meshData = useMemo(() => {
@@ -296,16 +298,17 @@ function TurbineMesh() {
         transparent: true,
       })
     }
+    const transparent = matConfig.transparent || matConfig.opacity < 1
     return new THREE.MeshPhysicalMaterial({
       color: matConfig.color,
       metalness: matConfig.metalness,
       roughness: matConfig.roughness,
       opacity: matConfig.opacity,
-      transparent: matConfig.transparent,
-      emissive: matConfig.emissiveIntensity > 0 ? matConfig.color : '#000000',
+      transparent,
+      emissive: matConfig.emissiveIntensity > 0 ? (matConfig.emissiveColor ?? matConfig.color) : '#000000',
       emissiveIntensity: matConfig.emissiveIntensity,
       side: THREE.DoubleSide,
-      clearcoat: materialPreset === 'carbon-fiber' ? 0.8 : 0,
+      clearcoat: matConfig.clearcoat ?? 0,
       clearcoatRoughness: 0.2,
     })
   }, [matConfig, materialPreset, isNeonShader, neonUniforms])
@@ -580,10 +583,23 @@ function WindParticles() {
 
 function GroundPlane() {
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
-      <circleGeometry args={[3, 64]} />
-      <meshStandardMaterial color="#0f1628" metalness={0.1} roughness={0.9} />
-    </mesh>
+    <>
+      {/* Wide flat grass terrain */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
+        <planeGeometry args={[60, 60]} />
+        <meshStandardMaterial color="#3a6b1e" roughness={0.92} metalness={0} />
+      </mesh>
+      {/* Inner lush ring closer to turbine */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
+        <circleGeometry args={[5, 64]} />
+        <meshStandardMaterial color="#4a8024" roughness={0.88} metalness={0} />
+      </mesh>
+      {/* Concrete/dirt base pad under turbine */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+        <circleGeometry args={[0.28, 32]} />
+        <meshStandardMaterial color="#8a8070" roughness={0.95} metalness={0.05} />
+      </mesh>
+    </>
   )
 }
 
@@ -633,21 +649,7 @@ function SmartOrbitControls({ isTransitioning }: { isTransitioning: boolean }) {
 }
 
 export default function TurbineViewer() {
-  const { bloomTier, isTransitioning } = useTurbineStore()
-  const { theme } = useThemeStore()
-
-  const bgColor = useMemo(() => {
-    if (theme === 'light') {
-      return '#f8fafc'
-    }
-    const colors: Record<string, string> = {
-      dormant: '#0a0e1a',
-      seedling: '#0b1020',
-      flourishing: '#0d1225',
-      radiant: '#10152e',
-    }
-    return colors[bloomTier] || '#0a0e1a'
-  }, [bloomTier, theme])
+  const { isTransitioning } = useTurbineStore()
 
   const handleCanvas = useCallback((c: HTMLCanvasElement) => {
     turbineCanvasRef = c
@@ -656,27 +658,54 @@ export default function TurbineViewer() {
   return (
     <div className="w-full h-full">
       <Canvas
-        camera={{ position: [1.8, 1.6, 1.8], fov: 45, near: 0.1, far: 100 }}
+        camera={{ position: [1.8, 1.6, 1.8], fov: 45, near: 0.1, far: 200 }}
         gl={{
           antialias: true,
           toneMapping: THREE.ACESFilmicToneMapping,
-          toneMappingExposure: 1.2,
+          toneMappingExposure: 1.1,
           preserveDrawingBuffer: true,
         }}
-        shadows
+        shadows="soft"
       >
-        <color attach="background" args={[bgColor]} />
-        <fog attach="fog" args={[bgColor, 4, 12]} />
+        {/* Sky dome — Preetham atmospheric model */}
+        <Sky
+          distance={450}
+          sunPosition={[100, 30, 50]}
+          turbidity={6}
+          rayleigh={0.8}
+          mieCoefficient={0.004}
+          mieDirectionalG={0.85}
+          inclination={0.49}
+          azimuth={0.25}
+        />
+
+        {/* Atmospheric haze toward horizon */}
+        <fog attach="fog" args={['#c8dff0', 18, 80]} />
 
         <SceneCapture />
         <CanvasRefCapture onCanvas={handleCanvas} />
 
         <CinematicCamera />
 
-        <ambientLight intensity={0.3} />
-        <directionalLight position={[3, 5, 2]} intensity={1.2} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
-        <pointLight position={[-2, 3, -1]} intensity={0.4} color="#5eead4" />
-        <pointLight position={[1, 0.5, 2]} intensity={0.2} color="#a78bfa" />
+        {/* Sun light — warm directional matching sky sun position */}
+        <directionalLight
+          position={[12, 18, 8]}
+          intensity={2.2}
+          color="#fff4d6"
+          castShadow
+          shadow-mapSize-width={2048}
+          shadow-mapSize-height={2048}
+          shadow-camera-near={0.5}
+          shadow-camera-far={50}
+          shadow-camera-left={-8}
+          shadow-camera-right={8}
+          shadow-camera-top={8}
+          shadow-camera-bottom={-8}
+        />
+        {/* Sky hemisphere fill — blue sky top, green ground bounce */}
+        <hemisphereLight args={['#87ceeb', '#4a8024', 0.8]} />
+        {/* Subtle fill from opposite side */}
+        <directionalLight position={[-5, 3, -4]} intensity={0.3} color="#b0d4ff" />
 
         <BloomTransitionOverlay />
 
@@ -685,7 +714,7 @@ export default function TurbineViewer() {
         </Float>
         <WindParticles />
         <GroundPlane />
-        <ContactShadows position={[0, 0, 0]} opacity={0.4} scale={5} blur={2.5} far={3} />
+        <ContactShadows position={[0, 0, 0]} opacity={0.5} scale={6} blur={2} far={4} color="#1a3d08" />
 
         <SmartOrbitControls isTransitioning={isTransitioning} />
       </Canvas>
