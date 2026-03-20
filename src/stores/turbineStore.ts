@@ -476,7 +476,7 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
     const { parametricCamber, parametricCamberPeak, parametricLeRadius, parametricTrailingSweep } = get()
     const pts = generateParametricProfile(parametricCamber, parametricCamberPeak, parametricLeRadius, parametricTrailingSweep)
     _skipHistoryPush = true
-    set({ bladePoints: pts, activePreset: null })
+    set({ bladePoints: pts, bladeHandles: pts.map(() => ({ x: 0, y: 0 })), activePreset: null })
     _skipHistoryPush = false
     get().updatePhysics()
   },

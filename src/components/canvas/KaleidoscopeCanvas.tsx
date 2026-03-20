@@ -532,10 +532,19 @@ export default function KaleidoscopeCanvas() {
     return { x: clientX - rect.left, y: clientY - rect.top }
   }, [])
 
-  const pixelToNormalized = useCallback((px: Vec2, canvas: HTMLCanvasElement): Vec2 => {
-    const cx = canvas.width / 2
-    const cy = canvas.height / 2
+  // Returns cx, cy, radius in CSS pixels (matching what getCanvasCoords returns)
+  const cssScale = (canvas: HTMLCanvasElement) => {
+    const dpr = Math.min(window.devicePixelRatio, 2)
+    const w = canvas.width / dpr
+    const h = canvas.height / dpr
+    const cx = w / 2
+    const cy = h / 2
     const radius = Math.min(cx, cy) * 0.75
+    return { cx, cy, radius }
+  }
+
+  const pixelToNormalized = useCallback((px: Vec2, canvas: HTMLCanvasElement): Vec2 => {
+    const { cx, cy, radius } = cssScale(canvas)
     const dx = px.x - cx
     const dy = px.y - cy
     const dist = Math.sqrt(dx * dx + dy * dy)
@@ -547,43 +556,39 @@ export default function KaleidoscopeCanvas() {
   }, [snapVal])
 
   const findNearestPoint = useCallback((px: Vec2, canvas: HTMLCanvasElement): number | null => {
-    const cx = canvas.width / 2
-    const cy = canvas.height / 2
-    const radius = Math.min(cx, cy) * 0.75
+    const { cx, cy, radius } = cssScale(canvas)
     const threshold = 18
 
     for (let i = 0; i < bladePoints.length; i++) {
       const pt = bladePoints[i]
       const worldX = cx + pt.x * radius
       const worldY = cy + pt.y * radius
-      const dx = px.x - worldX
-      const dy = px.y - worldY
-      if (Math.sqrt(dx * dx + dy * dy) < threshold) return i
+      if (Math.hypot(px.x - worldX, px.y - worldY) < threshold) return i
     }
     return null
   }, [bladePoints])
 
-  // Find nearest bezier handle endpoint; returns null if no hit
+  // Find nearest bezier handle endpoint — only checks selected point's handles to avoid accidental hits
   const findNearestHandle = useCallback((px: Vec2, canvas: HTMLCanvasElement): HandleDrag | null => {
-    const cx = canvas.width / 2
-    const cy = canvas.height / 2
-    const radius = Math.min(cx, cy) * 0.75
-    const threshold = 12
+    const { cx, cy, radius } = cssScale(canvas)
+    const threshold = 14
     const handles = useTurbineStore.getState().bladeHandles
     const pts = useTurbineStore.getState().bladePoints
+    const selIdx = selectedPointIdxRef.current
 
-    for (let i = 0; i < pts.length; i++) {
+    // Only check handles for the selected point (or all if none selected, for hover)
+    const idxRange = selIdx !== null ? [selIdx] : pts.map((_, i) => i)
+
+    for (const i of idxRange) {
       const pt = pts[i]
+      if (!pt) continue
       const worldX = cx + pt.x * radius
       const worldY = cy + pt.y * radius
-      // Effective tangent
       const h = handles[i] ?? { x: 0, y: 0 }
       const tang = (h.x !== 0 || h.y !== 0) ? h : crAutoTangent(pts, i)
-      // Out handle
       const ox = worldX + tang.x * radius
       const oy = worldY + tang.y * radius
       if (Math.hypot(px.x - ox, px.y - oy) < threshold) return { index: i, side: 'out' }
-      // In handle (mirrored)
       const ix = worldX - tang.x * radius
       const iy = worldY - tang.y * radius
       if (Math.hypot(px.x - ix, px.y - iy) < threshold) return { index: i, side: 'in' }
@@ -647,24 +652,18 @@ export default function KaleidoscopeCanvas() {
     mousePxRef.current = px
 
     if (dragHandle !== null) {
-      const cx = canvas.width / 2
-      const cy = canvas.height / 2
-      const radius = Math.min(cx, cy) * 0.75
+      const { cx, cy, radius } = cssScale(canvas)
       const pts = useTurbineStore.getState().bladePoints
       const pt = pts[dragHandle.index]
       if (!pt) return
       const worldX = cx + pt.x * radius
       const worldY = cy + pt.y * radius
-      // Compute tangent from drag position
       let dx = (px.x - worldX) / radius
       let dy = (px.y - worldY) / radius
-      // If dragging "in" side, flip to get the "out" tangent
       if (dragHandle.side === 'in') { dx = -dx; dy = -dy }
       updateBladeHandle(dragHandle.index, { x: dx, y: dy })
     } else if (dragIndex !== null) {
-      const cx = canvas.width / 2
-      const cy = canvas.height / 2
-      const radius = Math.min(cx, cy) * 0.75
+      const { cx, cy, radius } = cssScale(canvas)
       const updated: Vec2 = {
         x: Math.max(0, Math.min(1, snapVal((px.x - cx) / radius))),
         y: Math.max(0, Math.min(0.5, Math.abs(snapVal((px.y - cy) / radius)))),
@@ -796,9 +795,7 @@ export default function KaleidoscopeCanvas() {
       const currentIsDrawing = isDrawingRef.current
 
       if (currentDragIndex !== null) {
-        const cx = canvas.width / 2
-        const cy = canvas.height / 2
-        const radius = Math.min(cx, cy) * 0.75
+        const { cx, cy, radius } = cssScale(canvas)
         const snap = useTurbineStore.getState().snapToGrid
         const sv = (v: number) => snap ? Math.round(v / 0.05) * 0.05 : v
         updateBladePoint(currentDragIndex, {
