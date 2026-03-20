@@ -22,6 +22,38 @@ export interface MaterialConfig {
   emissiveIntensity: number
 }
 
+// ── Saved designs ─────────────────────────────────────────────────────────────
+export interface SavedDesign {
+  name: string
+  timestamp: number
+  bladePoints: Vec2[]
+  bladeCount: number
+  height: number
+  twist: number
+  taper: number
+  thickness: number
+  symmetryMode: SymmetryMode
+  materialPreset: MaterialPreset
+  chordCurve: Vec2[]
+  twistCurve: Vec2[]
+  airfoilUpper: Vec2[]
+  airfoilLower: Vec2[]
+}
+
+const LS_DESIGNS_KEY = 'turbinebloom_v1_designs'
+
+function loadPersistedDesigns(): SavedDesign[] {
+  try {
+    const raw = localStorage.getItem(LS_DESIGNS_KEY)
+    if (raw) return JSON.parse(raw) as SavedDesign[]
+  } catch { /* ignore */ }
+  return []
+}
+
+function persistDesigns(designs: SavedDesign[]) {
+  try { localStorage.setItem(LS_DESIGNS_KEY, JSON.stringify(designs)) } catch { /* ignore */ }
+}
+
 export const MATERIAL_PRESETS: Record<MaterialPreset, MaterialConfig> = {
   'teal-metal': { label: 'Teal Metal', color: '#2dd4bf', metalness: 0.55, roughness: 0.35, opacity: 1, transparent: false, emissiveIntensity: 0 },
   'brushed-steel': { label: 'Brushed Steel', color: '#b0b8c8', metalness: 0.85, roughness: 0.25, opacity: 1, transparent: false, emissiveIntensity: 0 },
@@ -201,6 +233,17 @@ interface TurbineState {
 
   // Computed physics update
   updatePhysics: () => void
+
+  // Airfoil cross-section (from AirfoilBezierEditor)
+  airfoilUpper: Vec2[]
+  airfoilLower: Vec2[]
+  setAirfoilProfile: (upper: Vec2[], lower: Vec2[]) => void
+
+  // Saved designs
+  savedDesigns: SavedDesign[]
+  saveDesign: (name: string) => void
+  loadSavedDesign: (name: string) => void
+  deleteDesign: (name: string) => void
 }
 
 function computeBloomTier(cp: number, windSpeed: number): BloomTier {
@@ -412,5 +455,61 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
       powerOutput: power,
       bloomTier: tier,
     })
+  },
+
+  // Airfoil
+  airfoilUpper: [],
+  airfoilLower: [],
+  setAirfoilProfile: (upper, lower) => set({ airfoilUpper: upper, airfoilLower: lower }),
+
+  // Saved designs
+  savedDesigns: loadPersistedDesigns(),
+  saveDesign: (name) => {
+    const s = get()
+    const design: SavedDesign = {
+      name,
+      timestamp: Date.now(),
+      bladePoints: s.bladePoints.map(p => ({ ...p })),
+      bladeCount: s.bladeCount,
+      height: s.height,
+      twist: s.twist,
+      taper: s.taper,
+      thickness: s.thickness,
+      symmetryMode: s.symmetryMode,
+      materialPreset: s.materialPreset,
+      chordCurve: s.chordCurve.map(p => ({ ...p })),
+      twistCurve: s.twistCurve.map(p => ({ ...p })),
+      airfoilUpper: s.airfoilUpper.map(p => ({ ...p })),
+      airfoilLower: s.airfoilLower.map(p => ({ ...p })),
+    }
+    const designs = [...s.savedDesigns.filter(d => d.name !== name), design]
+    persistDesigns(designs)
+    set({ savedDesigns: designs })
+  },
+  loadSavedDesign: (name) => {
+    const design = get().savedDesigns.find(d => d.name === name)
+    if (!design) return
+    get().pushUndo()
+    set({
+      bladePoints: design.bladePoints.map(p => ({ ...p })),
+      bladeCount: design.bladeCount,
+      height: design.height,
+      twist: design.twist,
+      taper: design.taper,
+      thickness: design.thickness,
+      symmetryMode: design.symmetryMode,
+      materialPreset: design.materialPreset,
+      chordCurve: design.chordCurve.map(p => ({ ...p })),
+      twistCurve: design.twistCurve.map(p => ({ ...p })),
+      airfoilUpper: (design.airfoilUpper || []).map(p => ({ ...p })),
+      airfoilLower: (design.airfoilLower || []).map(p => ({ ...p })),
+      activePreset: null,
+    })
+    get().updatePhysics()
+  },
+  deleteDesign: (name) => {
+    const designs = get().savedDesigns.filter(d => d.name !== name)
+    persistDesigns(designs)
+    set({ savedDesigns: designs })
   },
 }))

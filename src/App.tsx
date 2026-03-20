@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useTurbineStore } from './stores/turbineStore'
 import { usePuzzleStore } from './stores/puzzleStore'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
@@ -16,12 +16,21 @@ import Celebration from './components/puzzle/Celebration'
 import BladeSectionEditor from './components/editor/BladeSectionEditor'
 import SectionPreview from './components/editor/SectionPreview'
 import AirfoilBezierEditor from './components/editor/AirfoilBezierEditor'
+import CentralController from './components/ui/CentralController'
 import { TooltipProvider } from './components/ui/tooltip'
 import { ScrollArea } from './components/ui/scroll-area'
 import { Button } from './components/ui/button'
+import type { AirfoilExport } from './components/editor/AirfoilBezierEditor'
 
 export default function App() {
-  const { mode, updatePhysics, setTransitioning, setTransitionProgress } = useTurbineStore()
+  const { mode, updatePhysics, setTransitioning, setTransitionProgress, setAirfoilProfile } = useTurbineStore()
+
+  const handleAirfoilChange = useCallback((data: AirfoilExport) => {
+    setAirfoilProfile(
+      data.upperPoints.map(p => ({ x: p.x, y: p.y })),
+      data.lowerPoints.map(p => ({ x: p.x, y: p.y })),
+    )
+  }, [setAirfoilProfile])
   const { showChallengeList } = usePuzzleStore()
   const [leftOpen, setLeftOpen] = useState(true)
   const [rightOpen, setRightOpen] = useState(true)
@@ -111,13 +120,14 @@ export default function App() {
                 <div className="flex-1 relative rounded-lg border border-border overflow-hidden bg-background min-h-0">
                   <KaleidoscopeCanvas />
                   <PuzzleHUD />
+                  <CentralController />
                   <CanvasHint text="Click to add · Drag to reshape · Ctrl+Z undo" />
                 </div>
                 <SectionPanel />
               </div>
             ) : mode === 'airfoil' ? (
               <div className="flex-1 rounded-lg border border-border overflow-hidden bg-background min-h-0">
-                <AirfoilBezierEditor />
+                <AirfoilBezierEditor onChange={handleAirfoilChange} />
               </div>
             ) : mode === 'side' ? (
               <div className="flex-1 rounded-lg border border-border overflow-hidden bg-background">
@@ -126,7 +136,7 @@ export default function App() {
             ) : (
               <div className="flex-1 relative rounded-lg border border-border overflow-hidden bg-background">
                 <TurbineViewer />
-                <CanvasHint text="Drag to orbit · Scroll to zoom" />
+                <CanvasHint text="Drag to orbit · Scroll to zoom · Auto-rotates when idle" />
               </div>
             )}
 
