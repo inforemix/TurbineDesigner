@@ -374,7 +374,7 @@ export function estimateCpFromCurve(points: Vec2[], bladeCount: number): number 
 let _skipHistoryPush = false
 
 export const useTurbineStore = create<TurbineState>((set, get) => ({
-  mode: 'draw',
+  mode: 'view',
   setMode: (mode) => set({ mode }),
 
   isTransitioning: false,

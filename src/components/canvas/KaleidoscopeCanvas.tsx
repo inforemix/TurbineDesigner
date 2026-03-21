@@ -1463,33 +1463,6 @@ export default function KaleidoscopeCanvas() {
         )}
       </div>
 
-      {/* Undo/Redo buttons — top right */}
-      <div className="absolute top-3 right-3 flex gap-1.5">
-        <button
-          onClick={() => undo()}
-          disabled={!canUndo}
-          className="w-8 h-8 rounded-lg bg-surface/90 backdrop-blur-sm border border-border/50 text-text-dim
-            hover:text-teal hover:border-teal/30 disabled:opacity-30 disabled:cursor-not-allowed
-            flex items-center justify-center transition-all"
-          title="Undo (Ctrl+Z)"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 7v6h6" /><path d="M3 13a9 9 0 0 1 15.36-6.36" />
-          </svg>
-        </button>
-        <button
-          onClick={() => redo()}
-          disabled={!canRedo}
-          className="w-8 h-8 rounded-lg bg-surface/90 backdrop-blur-sm border border-border/50 text-text-dim
-            hover:text-teal hover:border-teal/30 disabled:opacity-30 disabled:cursor-not-allowed
-            flex items-center justify-center transition-all"
-          title="Redo (Ctrl+Shift+Z)"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 7v6h-6" /><path d="M21 13a9 9 0 0 0-15.36-6.36" />
-          </svg>
-        </button>
-      </div>
     </div>
   )
 }

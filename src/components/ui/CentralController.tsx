@@ -70,8 +70,8 @@ function Knob({ label, value, min, max, step, unit = '', color = '#2dd4bf', form
 
   return (
     <div
-      className="flex flex-col items-center gap-1 select-none cursor-ew-resize group"
-      style={{ width: 56 }}
+      className="flex flex-col items-center gap-0.5 select-none cursor-ew-resize group shrink-0"
+      style={{ width: 48 }}
       onMouseDown={onMouseDown}
       onWheel={onWheel}
       onMouseLeave={() => !dragging.current && setFocused(false)}
@@ -270,7 +270,7 @@ export default function CentralController() {
       {/* Main controller panel */}
       {!collapsed && (
         <div
-          className="flex flex-wrap justify-center items-center gap-x-3 gap-y-2 px-4 sm:px-5 py-3 rounded-2xl overflow-x-auto"
+          className="flex items-center gap-2 px-3 py-2.5 rounded-2xl overflow-x-auto shrink-0"
           style={{
             background: panelBg,
             border: panelBorder,
