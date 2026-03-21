@@ -277,6 +277,7 @@ export default function ParameterPanel() {
             onChange={setChordCurve}
             yMin={0.1} yMax={1.5}
             color="#2dd4bf"
+            colorLight="#0d9488"
           />
           <DistributionEditor
             label="Twist Distribution"
@@ -284,6 +285,7 @@ export default function ParameterPanel() {
             onChange={setTwistCurve}
             yMin={0} yMax={1}
             color="#a78bfa"
+            colorLight="#7c3aed"
           />
         </div>
       </div>
