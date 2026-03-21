@@ -545,13 +545,9 @@ export default function KaleidoscopeCanvas() {
 
   const pixelToNormalized = useCallback((px: Vec2, canvas: HTMLCanvasElement): Vec2 => {
     const { cx, cy, radius } = cssScale(canvas)
-    const dx = px.x - cx
-    const dy = px.y - cy
-    const dist = Math.sqrt(dx * dx + dy * dy)
-    const angle = Math.atan2(dy, dx)
     return {
-      x: snapVal(Math.min(1, dist / radius)),
-      y: snapVal(Math.max(-0.5, Math.min(0.5, (angle / (2 * Math.PI)) * 0.4))),
+      x: snapVal(Math.max(0, Math.min(1, (px.x - cx) / radius))),
+      y: snapVal(Math.max(0, Math.min(0.5, Math.abs((px.y - cy) / radius)))),
     }
   }, [snapVal])
 

@@ -12,7 +12,7 @@ export type SymmetryMode = 'pinwheel' | 'snowflake' | 'helix' | 'freeform'
 export type AppMode = 'draw' | 'side' | 'view'
 export type BloomTier = 'dormant' | 'seedling' | 'flourishing' | 'radiant'
 
-export type MaterialPreset = 'teal-metal' | 'brushed-steel' | 'carbon-fiber' | 'copper-patina' | 'frosted-glass' | 'matte-white' | 'neon-shader'
+export type MaterialPreset = 'teal-metal' | 'brushed-steel' | 'bamboo-shader' | 'copper-patina' | 'frosted-glass' | 'matte-white' | 'neon-shader'
 
 export interface MaterialConfig {
   label: string
@@ -88,7 +88,7 @@ function persistDesigns(designs: SavedDesign[]) {
 export const MATERIAL_PRESETS: Record<MaterialPreset, MaterialConfig> = {
   'teal-metal':    { label: 'Teal Metal',    color: '#2dd4bf', metalness: 0.55, roughness: 0.35, opacity: 1,   transparent: false, emissiveIntensity: 0 },
   'brushed-steel': { label: 'Brushed Steel', color: '#b0b8c8', metalness: 0.85, roughness: 0.25, opacity: 1,   transparent: false, emissiveIntensity: 0 },
-  'carbon-fiber':  { label: 'Carbon Fiber',  color: '#2a2a2a', metalness: 0.3,  roughness: 0.6,  opacity: 1,   transparent: false, emissiveIntensity: 0, clearcoat: 0.8 },
+  'bamboo-shader': { label: 'Bamboo',        color: '#8fad5a', metalness: 0,    roughness: 0,    opacity: 1,   transparent: false, emissiveIntensity: 0 },
   'copper-patina': { label: 'Copper Patina', color: '#6db89e', metalness: 0.7,  roughness: 0.45, opacity: 1,   transparent: false, emissiveIntensity: 0.05 },
   'frosted-glass': { label: 'Frosted Glass', color: '#c8e6f0', metalness: 0.1,  roughness: 0.15, opacity: 0.7, transparent: true,  emissiveIntensity: 0.1 },
   'matte-white':   { label: 'Matte White',   color: '#f0f0f0', metalness: 0.05, roughness: 0.9,  opacity: 1,   transparent: false, emissiveIntensity: 0 },
@@ -118,6 +118,29 @@ export const DEFAULT_NEON_CONFIG: NeonConfig = {
   pattern: 0,
   fresnelPower: 1.8,
   opacity: 0.85,
+}
+
+// ── Bamboo Shader configuration ────────────────────────────────────────────────
+export type BambooPattern = 0 | 1 | 2 | 3 | 4  // grain | nodes | rings | weave | lacquer
+
+export interface BambooConfig {
+  colorLight: string    // light bamboo tone
+  colorDark: string     // dark bamboo tone (nodes/shadow)
+  nodeSpacing: number   // spacing between bamboo nodes (height)
+  grainStrength: number // intensity of longitudinal grain lines
+  pattern: BambooPattern
+  shininess: number     // surface gloss (0=matte, 1=lacquered)
+  opacity: number
+}
+
+export const DEFAULT_BAMBOO_CONFIG: BambooConfig = {
+  colorLight: '#c8b560',
+  colorDark:  '#5a7a2a',
+  nodeSpacing: 4.0,
+  grainStrength: 0.55,
+  pattern: 0,
+  shininess: 0.4,
+  opacity: 1.0,
 }
 
 // Preset blade curves
@@ -277,6 +300,8 @@ interface TurbineState {
   setMaterialPreset: (preset: MaterialPreset) => void
   neonConfig: NeonConfig
   setNeonConfig: (partial: Partial<NeonConfig>) => void
+  bambooConfig: BambooConfig
+  setBambooConfig: (partial: Partial<BambooConfig>) => void
   // Per-preset material attribute overrides (user customizations)
   materialOverrides: Partial<Record<MaterialPreset, Partial<MaterialConfig>>>
   setMaterialOverride: (preset: MaterialPreset, partial: Partial<MaterialConfig>) => void
@@ -518,6 +543,8 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
   setMaterialPreset: (preset) => set({ materialPreset: preset }),
   neonConfig: { ...DEFAULT_NEON_CONFIG },
   setNeonConfig: (partial) => set(s => ({ neonConfig: { ...s.neonConfig, ...partial } })),
+  bambooConfig: { ...DEFAULT_BAMBOO_CONFIG },
+  setBambooConfig: (partial) => set(s => ({ bambooConfig: { ...s.bambooConfig, ...partial } })),
   materialOverrides: {},
   setMaterialOverride: (preset, partial) => set(s => ({
     materialOverrides: { ...s.materialOverrides, [preset]: { ...(s.materialOverrides[preset] ?? {}), ...partial } }
