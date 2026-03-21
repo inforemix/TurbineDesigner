@@ -1,5 +1,6 @@
 import { useRef, useCallback, useState } from 'react'
 import { useTurbineStore } from '../../stores/turbineStore'
+import { useThemeStore } from '../../stores/themeStore'
 
 /* ── Drag-based compact knob/slider ─────────────────────────────────────────
    Click to focus, then drag left/right (or use scroll) to change value.
@@ -15,9 +16,10 @@ interface KnobProps {
   color?: string
   format?: (v: number) => string
   onChange: (v: number) => void
+  isLight?: boolean
 }
 
-function Knob({ label, value, min, max, step, unit = '', color = '#2dd4bf', format, onChange }: KnobProps) {
+function Knob({ label, value, min, max, step, unit = '', color = '#2dd4bf', format, onChange, isLight }: KnobProps) {
   const dragging = useRef(false)
   const startX = useRef(0)
   const startVal = useRef(value)
@@ -62,10 +64,14 @@ function Knob({ label, value, min, max, step, unit = '', color = '#2dd4bf', form
 
   const displayVal = format ? format(value) : `${Number.isInteger(step) ? Math.round(value) : value.toFixed(1)}${unit}`
 
+  const arcBgStroke = isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.06)'
+  const labelColor = isLight ? '#64748b' : '#64748b'
+  const labelHoverColor = isLight ? '#334155' : '#94a3b8'
+
   return (
     <div
       className="flex flex-col items-center gap-1 select-none cursor-ew-resize group"
-      style={{ width: 64 }}
+      style={{ width: 56 }}
       onMouseDown={onMouseDown}
       onWheel={onWheel}
       onMouseLeave={() => !dragging.current && setFocused(false)}
@@ -77,7 +83,7 @@ function Knob({ label, value, min, max, step, unit = '', color = '#2dd4bf', form
           <path
             d="M 4 22 A 16 16 0 0 1 36 22"
             fill="none"
-            stroke="rgba(255,255,255,0.06)"
+            stroke={arcBgStroke}
             strokeWidth={3}
             strokeLinecap="round"
           />
@@ -126,7 +132,12 @@ function Knob({ label, value, min, max, step, unit = '', color = '#2dd4bf', form
       </div>
 
       {/* Label */}
-      <span className="text-[8px] uppercase tracking-widest text-slate-500 group-hover:text-slate-400 transition-colors font-medium">
+      <span
+        className="text-[8px] uppercase tracking-widest font-medium transition-colors"
+        style={{ color: labelColor }}
+        onMouseEnter={e => (e.currentTarget.style.color = labelHoverColor)}
+        onMouseLeave={e => (e.currentTarget.style.color = labelColor)}
+      >
         {label}
       </span>
     </div>
@@ -134,8 +145,16 @@ function Knob({ label, value, min, max, step, unit = '', color = '#2dd4bf', form
 }
 
 /* ── Blade count selector ─────────────────────────────────────────────────── */
-function BladeCountSelector() {
+function BladeCountSelector({ isLight }: { isLight: boolean }) {
   const { bladeCount, setBladeCount } = useTurbineStore()
+
+  const teal = isLight ? '#0d9488' : '#2dd4bf'
+  const tealBg = isLight ? 'rgba(13,148,136,0.15)' : 'rgba(45,212,191,0.2)'
+  const tealBorder = isLight ? 'rgba(13,148,136,0.4)' : 'rgba(45,212,191,0.5)'
+  const tealShadow = isLight ? '0 0 8px rgba(13,148,136,0.15)' : '0 0 8px rgba(45,212,191,0.2)'
+  const inactiveColor = isLight ? '#64748b' : '#475569'
+  const inactiveBorder = isLight ? 'rgba(100,116,139,0.35)' : 'rgba(71,85,105,0.3)'
+  const labelColor = isLight ? '#64748b' : '#64748b'
 
   return (
     <div className="flex flex-col items-center gap-1">
@@ -146,15 +165,15 @@ function BladeCountSelector() {
             onClick={() => setBladeCount(n)}
             className="w-6 h-6 rounded-md text-[10px] font-bold transition-all border"
             style={bladeCount === n
-              ? { background: 'rgba(45,212,191,0.2)', color: '#2dd4bf', borderColor: 'rgba(45,212,191,0.5)', boxShadow: '0 0 8px rgba(45,212,191,0.2)' }
-              : { background: 'transparent', color: '#475569', borderColor: 'rgba(71,85,105,0.3)' }
+              ? { background: tealBg, color: teal, borderColor: tealBorder, boxShadow: tealShadow }
+              : { background: 'transparent', color: inactiveColor, borderColor: inactiveBorder }
             }
           >
             {n}
           </button>
         ))}
       </div>
-      <span className="text-[8px] uppercase tracking-widest text-slate-500 font-medium">Blades</span>
+      <span className="text-[8px] uppercase tracking-widest font-medium" style={{ color: labelColor }}>Blades</span>
     </div>
   )
 }
@@ -164,9 +183,17 @@ const SYMMETRY_ICONS: Record<string, string> = {
   pinwheel: '⟳', helix: '⤢', snowflake: '❄', freeform: '∿',
 }
 
-function SymmSelector() {
+function SymmSelector({ isLight }: { isLight: boolean }) {
   const { symmetryMode, setSymmetryMode } = useTurbineStore()
   const modes = ['pinwheel', 'helix', 'snowflake', 'freeform'] as const
+
+  const violet = isLight ? '#7c3aed' : '#a78bfa'
+  const violetBg = isLight ? 'rgba(124,58,237,0.12)' : 'rgba(167,139,250,0.2)'
+  const violetBorder = isLight ? 'rgba(124,58,237,0.35)' : 'rgba(167,139,250,0.5)'
+  const violetShadow = isLight ? '0 0 8px rgba(124,58,237,0.1)' : '0 0 8px rgba(167,139,250,0.15)'
+  const inactiveColor = isLight ? '#64748b' : '#475569'
+  const inactiveBorder = isLight ? 'rgba(100,116,139,0.35)' : 'rgba(71,85,105,0.3)'
+  const labelColor = isLight ? '#64748b' : '#64748b'
 
   return (
     <div className="flex flex-col items-center gap-1">
@@ -178,22 +205,27 @@ function SymmSelector() {
             title={m}
             className="w-6 h-6 rounded-md text-[11px] transition-all border"
             style={symmetryMode === m
-              ? { background: 'rgba(167,139,250,0.2)', color: '#a78bfa', borderColor: 'rgba(167,139,250,0.5)', boxShadow: '0 0 8px rgba(167,139,250,0.15)' }
-              : { background: 'transparent', color: '#475569', borderColor: 'rgba(71,85,105,0.3)' }
+              ? { background: violetBg, color: violet, borderColor: violetBorder, boxShadow: violetShadow }
+              : { background: 'transparent', color: inactiveColor, borderColor: inactiveBorder }
             }
           >
             {SYMMETRY_ICONS[m]}
           </button>
         ))}
       </div>
-      <span className="text-[8px] uppercase tracking-widest text-slate-500 font-medium">Symm</span>
+      <span className="text-[8px] uppercase tracking-widest font-medium" style={{ color: labelColor }}>Symm</span>
     </div>
   )
 }
 
 /* ── Divider ──────────────────────────────────────────────────────────────── */
-function Div() {
-  return <div className="w-px self-stretch" style={{ background: 'rgba(45,212,191,0.07)' }} />
+function Div({ isLight }: { isLight: boolean }) {
+  return (
+    <div
+      className="w-px self-stretch"
+      style={{ background: isLight ? 'rgba(13,148,136,0.18)' : 'rgba(45,212,191,0.07)' }}
+    />
+  )
 }
 
 /* ── Main CentralController ───────────────────────────────────────────────── */
@@ -204,20 +236,33 @@ export default function CentralController() {
     height, setHeight,
     curveSmoothing, setCurveSmoothing,
   } = useTurbineStore()
+  const { theme } = useThemeStore()
+  const isLight = theme === 'light'
 
   const [collapsed, setCollapsed] = useState(false)
 
+  const panelBg = isLight ? 'rgba(255,255,255,0.97)' : 'rgba(8,12,22,0.96)'
+  const panelBorder = isLight ? '1px solid rgba(13,148,136,0.25)' : '1px solid rgba(45,212,191,0.12)'
+  const panelShadow = isLight
+    ? '0 4px 24px rgba(0,0,0,0.1), 0 0 32px rgba(13,148,136,0.06)'
+    : '0 4px 32px rgba(0,0,0,0.5), 0 0 40px rgba(45,212,191,0.03)'
+
+  const pillBg = isLight ? 'rgba(248,250,252,0.92)' : 'rgba(10,14,26,0.8)'
+  const pillColor = isLight ? 'rgba(13,148,136,0.85)' : 'rgba(45,212,191,0.4)'
+  const pillBorder = isLight ? '1px solid rgba(13,148,136,0.22)' : '1px solid rgba(45,212,191,0.1)'
+
+  const tealColor = isLight ? '#0d9488' : '#2dd4bf'
+  const tealGlow = isLight ? '#2dd4bf' : '#5eead4'
+  const violetColor = isLight ? '#7c3aed' : '#a78bfa'
+  const indigoColor = isLight ? '#4f46e5' : '#818cf8'
+
   return (
-    <div className="absolute bottom-14 left-1/2 -translate-x-1/2 z-20 pointer-events-auto flex flex-col items-center gap-1">
+    <div className="absolute bottom-14 left-1/2 -translate-x-1/2 z-20 pointer-events-auto flex flex-col items-center gap-1 max-w-[calc(100vw-1rem)]">
       {/* Toggle pill */}
       <button
         onClick={() => setCollapsed(v => !v)}
         className="px-3 py-0.5 rounded-full text-[8px] uppercase tracking-widest font-semibold transition-all"
-        style={{
-          background: 'rgba(10,14,26,0.8)',
-          color: 'rgba(45,212,191,0.4)',
-          border: '1px solid rgba(45,212,191,0.1)',
-        }}
+        style={{ background: pillBg, color: pillColor, border: pillBorder }}
       >
         {collapsed ? '▴ controls' : '▾ controls'}
       </button>
@@ -225,23 +270,23 @@ export default function CentralController() {
       {/* Main controller panel */}
       {!collapsed && (
         <div
-          className="flex items-center gap-3 px-5 py-3 rounded-2xl"
+          className="flex flex-wrap justify-center items-center gap-x-3 gap-y-2 px-4 sm:px-5 py-3 rounded-2xl overflow-x-auto"
           style={{
-            background: 'rgba(8,12,22,0.96)',
-            border: '1px solid rgba(45,212,191,0.12)',
-            boxShadow: '0 4px 32px rgba(0,0,0,0.5), 0 0 40px rgba(45,212,191,0.03)',
+            background: panelBg,
+            border: panelBorder,
+            boxShadow: panelShadow,
             backdropFilter: 'blur(20px)',
           }}
         >
           {/* Blade count */}
-          <BladeCountSelector />
+          <BladeCountSelector isLight={isLight} />
 
-          <Div />
+          <Div isLight={isLight} />
 
           {/* Symmetry */}
-          <SymmSelector />
+          <SymmSelector isLight={isLight} />
 
-          <Div />
+          <Div isLight={isLight} />
 
           {/* Twist knob */}
           <Knob
@@ -249,8 +294,9 @@ export default function CentralController() {
             value={twist}
             min={-45} max={45} step={1}
             unit="°"
-            color="#2dd4bf"
+            color={tealColor}
             onChange={setTwist}
+            isLight={isLight}
           />
 
           {/* Taper knob */}
@@ -258,12 +304,13 @@ export default function CentralController() {
             label="Taper"
             value={Math.round(taper * 100)}
             min={0} max={80} step={5}
-            color="#5eead4"
+            color={tealGlow}
             format={v => `${v}%`}
             onChange={v => setTaper(v / 100)}
+            isLight={isLight}
           />
 
-          <Div />
+          <Div isLight={isLight} />
 
           {/* Height knob */}
           <Knob
@@ -271,8 +318,9 @@ export default function CentralController() {
             value={height}
             min={0.5} max={3} step={0.1}
             unit="m"
-            color="#a78bfa"
+            color={violetColor}
             onChange={setHeight}
+            isLight={isLight}
           />
 
           {/* Smoothing knob */}
@@ -280,8 +328,9 @@ export default function CentralController() {
             label="Smooth"
             value={curveSmoothing}
             min={2} max={20} step={1}
-            color="#818cf8"
+            color={indigoColor}
             onChange={setCurveSmoothing}
+            isLight={isLight}
           />
         </div>
       )}
