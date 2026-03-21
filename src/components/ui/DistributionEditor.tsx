@@ -1,5 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react'
 import type { Vec2 } from '../../stores/turbineStore'
+import { useThemeStore } from '../../stores/themeStore'
 
 interface Props {
   /** Sorted control points: x=height fraction 0→1, y=value */
@@ -11,6 +12,8 @@ interface Props {
   yMax?: number
   /** Accent color for drawing */
   color?: string
+  /** Light-mode accent color (defaults to a darker shade of color) */
+  colorLight?: string
   label?: string
 }
 
@@ -37,12 +40,15 @@ export default function DistributionEditor({
   yMin = 0,
   yMax = 1,
   color = '#2dd4bf',
+  colorLight,
   label,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const dragging = useRef<number | null>(null)
   const ptsRef = useRef(points)
   ptsRef.current = points
+  const { theme } = useThemeStore()
+  const isLight = theme === 'light'
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current
@@ -50,16 +56,30 @@ export default function DistributionEditor({
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
+    const accentColor = isLight ? (colorLight ?? color) : color
+    const bgColor = isLight ? '#f8fafc' : '#0d1424'
+    const gridColor = isLight ? '#e2e8f0' : '#1e2844'
+    const dotOutline = isLight ? '#f8fafc' : '#0d1424'
+
     ctx.clearRect(0, 0, W, H)
 
     // Background
-    ctx.fillStyle = '#0d1424'
+    ctx.fillStyle = bgColor
     ctx.beginPath()
     ctx.roundRect(0, 0, W, H, 4)
     ctx.fill()
 
+    // Border in light mode
+    if (isLight) {
+      ctx.strokeStyle = '#e2e8f0'
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      ctx.roundRect(0.5, 0.5, W - 1, H - 1, 4)
+      ctx.stroke()
+    }
+
     // Grid lines (3 horizontal)
-    ctx.strokeStyle = '#1e2844'
+    ctx.strokeStyle = gridColor
     ctx.lineWidth = 1
     for (let i = 0; i <= 2; i++) {
       const y = PAD + (i / 2) * (H - PAD * 2)
@@ -79,7 +99,7 @@ export default function DistributionEditor({
       if (i === 0) ctx.moveTo(cx, cy)
       else ctx.lineTo(cx, cy)
     }
-    ctx.strokeStyle = color
+    ctx.strokeStyle = accentColor
     ctx.lineWidth = 1.5
     ctx.stroke()
 
@@ -95,7 +115,7 @@ export default function DistributionEditor({
     ctx.lineTo(rx, H - PAD)
     ctx.lineTo(lx, H - PAD)
     ctx.closePath()
-    ctx.fillStyle = color + '18'
+    ctx.fillStyle = accentColor + (isLight ? '22' : '18')
     ctx.fill()
 
     // Control points
@@ -103,13 +123,13 @@ export default function DistributionEditor({
       const [cx, cy] = ptToCanvas(pt, yMin, yMax)
       ctx.beginPath()
       ctx.arc(cx, cy, 4, 0, Math.PI * 2)
-      ctx.fillStyle = dragging.current === i ? '#fff' : color
+      ctx.fillStyle = dragging.current === i ? (isLight ? '#0f172a' : '#fff') : accentColor
       ctx.fill()
-      ctx.strokeStyle = '#0d1424'
+      ctx.strokeStyle = dotOutline
       ctx.lineWidth = 1
       ctx.stroke()
     })
-  }, [yMin, yMax, color])
+  }, [yMin, yMax, color, colorLight, isLight])
 
   useEffect(() => { draw() }, [points, draw])
 
@@ -174,7 +194,7 @@ export default function DistributionEditor({
     <div className="flex flex-col gap-1">
       {label && (
         <div className="flex justify-between items-center">
-          <span className="text-[11px] uppercase tracking-wider text-secondary-foreground">{label}</span>
+          <span className="text-[11px] uppercase tracking-wider font-semibold text-primary">{label}</span>
           <span className="text-[10px] font-mono text-muted-foreground">
             {rootY.toFixed(2)} → {tipY.toFixed(2)}
           </span>

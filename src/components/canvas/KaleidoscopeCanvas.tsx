@@ -473,7 +473,7 @@ export default function KaleidoscopeCanvas() {
   selectedPointIdxRef.current = selectedPointIdx
   const animFrameRef = useRef<number>(0)
   const timeRef = useRef(0)
-  const [showMiniPreview, setShowMiniPreview] = useState(false)
+  const [showMiniPreview, setShowMiniPreview] = useState(true)
   const [showShapes, setShowShapes] = useState(false)
   const rawPointsRef = useRef<Vec2[]>([])
   const rawPixelPreviewRef = useRef<Vec2[]>([])
