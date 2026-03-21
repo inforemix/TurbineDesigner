@@ -255,13 +255,14 @@ function MobilePresetDrawer() {
 function MobileBottomBar() {
   const { mode } = useTurbineStore()
   const [open, setOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState<'params' | 'airfoil' | 'section' | 'physics'>('params')
+  const [activeTab, setActiveTab] = useState<'params' | 'airfoil' | 'section' | 'blades' | 'physics'>('params')
 
   const tabs = mode === 'draw'
     ? [
         { id: 'params' as const, label: 'Params' },
         { id: 'airfoil' as const, label: 'Airfoil' },
         { id: 'section' as const, label: 'Section' },
+        { id: 'blades' as const, label: 'Blades' },
       ]
     : [
         { id: 'params' as const, label: 'Params' },
@@ -301,6 +302,7 @@ function MobileBottomBar() {
           {activeTab === 'params' && <ParameterPanel />}
           {activeTab === 'airfoil' && mode === 'draw' && <AirfoilSelector />}
           {activeTab === 'section' && mode === 'draw' && <BladeSectionEditor />}
+          {activeTab === 'blades' && mode === 'draw' && <BladeSectionStacker />}
           {activeTab === 'physics' && mode === 'view' && <PhysicsDashboard />}
         </div>
       )}

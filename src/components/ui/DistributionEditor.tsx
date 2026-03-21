@@ -1,18 +1,13 @@
-import { useRef, useEffect, useCallback } from 'react'
+import { useRef, useState, useCallback } from 'react'
 import type { Vec2 } from '../../stores/turbineStore'
 import { useThemeStore } from '../../stores/themeStore'
 
 interface Props {
-  /** Sorted control points: x=height fraction 0→1, y=value */
   points: Vec2[]
   onChange: (pts: Vec2[]) => void
-  /** Y-axis min value (default 0) */
   yMin?: number
-  /** Y-axis max value (default 1) */
   yMax?: number
-  /** Accent color for drawing */
   color?: string
-  /** Light-mode accent color (defaults to a darker shade of color) */
   colorLight?: string
   label?: string
 }
@@ -22,16 +17,23 @@ const H = 64
 const PAD = 8
 const HIT = 7
 
-function ptToCanvas(pt: Vec2, yMin: number, yMax: number): [number, number] {
-  const cx = PAD + pt.x * (W - PAD * 2)
-  const cy = H - PAD - ((pt.y - yMin) / (yMax - yMin)) * (H - PAD * 2)
-  return [cx, cy]
+function ptToSVG(pt: Vec2, yMin: number, yMax: number): [number, number] {
+  const x = PAD + pt.x * (W - PAD * 2)
+  const y = H - PAD - ((pt.y - yMin) / (yMax - yMin)) * (H - PAD * 2)
+  return [x, y]
 }
 
-function canvasToPt(cx: number, cy: number, yMin: number, yMax: number): Vec2 {
-  const x = Math.max(0, Math.min(1, (cx - PAD) / (W - PAD * 2)))
-  const y = yMin + (1 - (cy - PAD) / (H - PAD * 2)) * (yMax - yMin)
+function svgToPt(svgX: number, svgY: number, yMin: number, yMax: number): Vec2 {
+  const x = Math.max(0, Math.min(1, (svgX - PAD) / (W - PAD * 2)))
+  const y = yMin + (1 - (svgY - PAD) / (H - PAD * 2)) * (yMax - yMin)
   return { x, y: Math.max(yMin, Math.min(yMax, y)) }
+}
+
+function clientToSVG(e: { clientX: number; clientY: number }, rect: DOMRect): [number, number] {
+  return [
+    (e.clientX - rect.left) * (W / rect.width),
+    (e.clientY - rect.top) * (H / rect.height),
+  ]
 }
 
 export default function DistributionEditor({
@@ -43,150 +45,79 @@ export default function DistributionEditor({
   colorLight,
   label,
 }: Props) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const svgRef = useRef<SVGSVGElement>(null)
   const dragging = useRef<number | null>(null)
-  const ptsRef = useRef(points)
-  ptsRef.current = points
+  const [dragIdx, setDragIdx] = useState<number | null>(null)
   const { theme } = useThemeStore()
   const isLight = theme === 'light'
 
-  const draw = useCallback(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
+  const accent = isLight ? (colorLight ?? color) : color
+  const bgColor = isLight ? '#f8fafc' : '#0d1424'
+  const borderColor = isLight ? '#e2e8f0' : 'none'
+  const gridColor = isLight ? '#e2e8f0' : '#1e2844'
+  const fillAlpha = isLight ? '28' : '18'
 
-    const accentColor = isLight ? (colorLight ?? color) : color
-    const bgColor = isLight ? '#f8fafc' : '#0d1424'
-    const gridColor = isLight ? '#e2e8f0' : '#1e2844'
-    const dotOutline = isLight ? '#f8fafc' : '#0d1424'
+  // Build SVG coordinate pairs
+  const coords = points.map(p => ptToSVG(p, yMin, yMax))
+  const linePoints = coords.map(([x, y]) => `${x},${y}`).join(' ')
+  const fillPoints = coords.length >= 2
+    ? [
+        ...coords.map(([x, y]) => `${x},${y}`),
+        `${coords[coords.length - 1][0]},${H - PAD}`,
+        `${coords[0][0]},${H - PAD}`,
+      ].join(' ')
+    : ''
 
-    ctx.clearRect(0, 0, W, H)
-
-    // Background
-    ctx.fillStyle = bgColor
-    ctx.beginPath()
-    ctx.roundRect(0, 0, W, H, 4)
-    ctx.fill()
-
-    // Border in light mode
-    if (isLight) {
-      ctx.strokeStyle = '#e2e8f0'
-      ctx.lineWidth = 1
-      ctx.beginPath()
-      ctx.roundRect(0.5, 0.5, W - 1, H - 1, 4)
-      ctx.stroke()
-    }
-
-    // Grid lines (3 horizontal)
-    ctx.strokeStyle = gridColor
-    ctx.lineWidth = 1
-    for (let i = 0; i <= 2; i++) {
-      const y = PAD + (i / 2) * (H - PAD * 2)
-      ctx.beginPath()
-      ctx.moveTo(PAD, y)
-      ctx.lineTo(W - PAD, y)
-      ctx.stroke()
-    }
-
-    const pts = ptsRef.current
-    if (pts.length < 2) return
-
-    // Curve
-    ctx.beginPath()
-    for (let i = 0; i < pts.length; i++) {
-      const [cx, cy] = ptToCanvas(pts[i], yMin, yMax)
-      if (i === 0) ctx.moveTo(cx, cy)
-      else ctx.lineTo(cx, cy)
-    }
-    ctx.strokeStyle = accentColor
-    ctx.lineWidth = 1.5
-    ctx.stroke()
-
-    // Fill area under curve
-    const [lx] = ptToCanvas(pts[0], yMin, yMax)
-    const [rx] = ptToCanvas(pts[pts.length - 1], yMin, yMax)
-    ctx.beginPath()
-    for (let i = 0; i < pts.length; i++) {
-      const [cx, cy] = ptToCanvas(pts[i], yMin, yMax)
-      if (i === 0) ctx.moveTo(cx, cy)
-      else ctx.lineTo(cx, cy)
-    }
-    ctx.lineTo(rx, H - PAD)
-    ctx.lineTo(lx, H - PAD)
-    ctx.closePath()
-    ctx.fillStyle = accentColor + (isLight ? '22' : '18')
-    ctx.fill()
-
-    // Control points
-    pts.forEach((pt, i) => {
-      const [cx, cy] = ptToCanvas(pt, yMin, yMax)
-      ctx.beginPath()
-      ctx.arc(cx, cy, 4, 0, Math.PI * 2)
-      ctx.fillStyle = dragging.current === i ? (isLight ? '#0f172a' : '#fff') : accentColor
-      ctx.fill()
-      ctx.strokeStyle = dotOutline
-      ctx.lineWidth = 1
-      ctx.stroke()
-    })
-  }, [yMin, yMax, color, colorLight, isLight])
-
-  useEffect(() => { draw() }, [points, draw])
-
-  const getHit = (ex: number, ey: number): number => {
-    const rect = canvasRef.current!.getBoundingClientRect()
-    const mx = (ex - rect.left) * (W / rect.width)
-    const my = (ey - rect.top) * (H / rect.height)
-    for (let i = 0; i < ptsRef.current.length; i++) {
-      const [cx, cy] = ptToCanvas(ptsRef.current[i], yMin, yMax)
-      if (Math.hypot(mx - cx, my - cy) <= HIT) return i
+  const getHitIdx = useCallback((clientX: number, clientY: number): number => {
+    const rect = svgRef.current!.getBoundingClientRect()
+    const [sx, sy] = clientToSVG({ clientX, clientY }, rect)
+    for (let i = 0; i < points.length; i++) {
+      const [cx, cy] = ptToSVG(points[i], yMin, yMax)
+      if (Math.hypot(sx - cx, sy - cy) <= HIT) return i
     }
     return -1
-  }
+  }, [points, yMin, yMax])
 
-  const onMouseDown = (e: React.MouseEvent) => {
-    const hit = getHit(e.clientX, e.clientY)
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    const hit = getHitIdx(e.clientX, e.clientY)
     if (hit >= 0) {
       dragging.current = hit
+      setDragIdx(hit)
       return
     }
-    // Add a new point
-    if (ptsRef.current.length >= 4) return
-    const rect = canvasRef.current!.getBoundingClientRect()
-    const mx = (e.clientX - rect.left) * (W / rect.width)
-    const my = (e.clientY - rect.top) * (H / rect.height)
-    const newPt = canvasToPt(mx, my, yMin, yMax)
-    const next = [...ptsRef.current, newPt].sort((a, b) => a.x - b.x)
-    onChange(next)
-  }
+    // Add point (max 4)
+    if (points.length >= 4) return
+    const rect = svgRef.current!.getBoundingClientRect()
+    const [sx, sy] = clientToSVG(e, rect)
+    const newPt = svgToPt(sx, sy, yMin, yMax)
+    onChange([...points, newPt].sort((a, b) => a.x - b.x))
+  }, [getHitIdx, points, yMin, yMax, onChange])
 
-  const onMouseMove = (e: React.MouseEvent) => {
+  const onMouseMove = useCallback((e: React.MouseEvent) => {
     if (dragging.current === null) return
-    const rect = canvasRef.current!.getBoundingClientRect()
-    const mx = (e.clientX - rect.left) * (W / rect.width)
-    const my = (e.clientY - rect.top) * (H / rect.height)
     const idx = dragging.current
-    const pts = ptsRef.current
-    const updated = canvasToPt(mx, my, yMin, yMax)
-    // Clamp x so first/last don't cross neighbors
-    const xMin = idx === 0 ? 0 : pts[idx - 1].x + 0.05
-    const xMax = idx === pts.length - 1 ? 1 : pts[idx + 1].x - 0.05
+    const rect = svgRef.current!.getBoundingClientRect()
+    const [sx, sy] = clientToSVG(e, rect)
+    const updated = svgToPt(sx, sy, yMin, yMax)
+    const xMin = idx === 0 ? 0 : points[idx - 1].x + 0.05
+    const xMax = idx === points.length - 1 ? 1 : points[idx + 1].x - 0.05
     const newPt: Vec2 = { x: Math.max(xMin, Math.min(xMax, updated.x)), y: updated.y }
-    const next = pts.map((p, i) => (i === idx ? newPt : p))
-    onChange(next)
-  }
+    onChange(points.map((p, i) => (i === idx ? newPt : p)))
+  }, [points, yMin, yMax, onChange])
 
-  const onMouseUp = () => { dragging.current = null; draw() }
+  const onMouseUp = useCallback(() => {
+    dragging.current = null
+    setDragIdx(null)
+  }, [])
 
-  const onContextMenu = (e: React.MouseEvent) => {
+  const onContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
-    const pts = ptsRef.current
-    if (pts.length <= 2) return
-    const hit = getHit(e.clientX, e.clientY)
-    if (hit >= 0) onChange(pts.filter((_, i) => i !== hit))
-  }
+    if (points.length <= 2) return
+    const hit = getHitIdx(e.clientX, e.clientY)
+    if (hit >= 0) onChange(points.filter((_, i) => i !== hit))
+  }, [getHitIdx, points, onChange])
 
-  // Root and tip value labels
   const rootY = points.length ? points[0].y : yMin
   const tipY = points.length ? points[points.length - 1].y : yMin
 
@@ -200,17 +131,62 @@ export default function DistributionEditor({
           </span>
         </div>
       )}
-      <canvas
-        ref={canvasRef}
-        width={W}
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${W} ${H}`}
+        width="100%"
         height={H}
-        style={{ width: '100%', height: H, cursor: 'crosshair', borderRadius: 4 }}
+        style={{ display: 'block', cursor: 'crosshair', borderRadius: 4 }}
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
         onMouseLeave={onMouseUp}
         onContextMenu={onContextMenu}
-      />
+      >
+        {/* Background */}
+        <rect x={0} y={0} width={W} height={H} rx={4} fill={bgColor} />
+        {isLight && <rect x={0.5} y={0.5} width={W - 1} height={H - 1} rx={4} fill="none" stroke={borderColor} strokeWidth={1} />}
+
+        {/* Grid lines */}
+        {[0, 1, 2].map(i => {
+          const gy = PAD + (i / 2) * (H - PAD * 2)
+          return <line key={i} x1={PAD} y1={gy} x2={W - PAD} y2={gy} stroke={gridColor} strokeWidth={1} />
+        })}
+
+        {/* Fill area */}
+        {fillPoints && (
+          <polygon points={fillPoints} fill={accent + fillAlpha} />
+        )}
+
+        {/* Curve line */}
+        {coords.length >= 2 && (
+          <polyline
+            points={linePoints}
+            fill="none"
+            stroke={accent}
+            strokeWidth={1.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        )}
+
+        {/* Control point dots */}
+        {coords.map(([cx, cy], i) => (
+          <g key={i}>
+            {/* Outer ring */}
+            <circle cx={cx} cy={cy} r={5} fill={bgColor} />
+            {/* Filled dot */}
+            <circle
+              cx={cx}
+              cy={cy}
+              r={4}
+              fill={dragIdx === i ? (isLight ? '#0f172a' : '#ffffff') : accent}
+              stroke={bgColor}
+              strokeWidth={1}
+            />
+          </g>
+        ))}
+      </svg>
       <span className="text-[9px] text-muted-foreground text-center">
         Drag handles · Click to add · Right-click to remove
       </span>
