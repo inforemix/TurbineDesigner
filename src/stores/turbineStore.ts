@@ -256,6 +256,9 @@ interface TurbineState {
   bladeSections: BladeSection[]
   setBladeSections: (sections: BladeSection[]) => void
   updateBladeSection: (index: number, section: Partial<BladeSection>) => void
+  addBladeSection: () => void
+  removeBladeSection: (index: number) => void
+  loadSectionPreset: (name: 'gorlov' | 'troposkein' | 'straight' | 'self-starter') => void
   resetBladeSections: () => void
 
   // 2.5D section view
@@ -494,6 +497,51 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
   updateBladeSection: (index, partial) => {
     const sections = [...get().bladeSections]
     sections[index] = { ...sections[index], ...partial }
+    set({ bladeSections: sections })
+  },
+  addBladeSection: () => {
+    const sections = get().bladeSections
+    const last = sections[sections.length - 1]
+    const newH = Math.min(1.0, last.heightFraction + 0.15)
+    set({ bladeSections: [...sections, { heightFraction: newH, twistOffset: 0, taperScale: 1.0 }] })
+  },
+  removeBladeSection: (index) => {
+    const sections = get().bladeSections
+    if (sections.length <= 2) return
+    set({ bladeSections: sections.filter((_, i) => i !== index) })
+  },
+  loadSectionPreset: (name) => {
+    const presets: Record<string, BladeSection[]> = {
+      gorlov: [
+        { heightFraction: 0.0,  twistOffset:   0, taperScale: 1.1 },
+        { heightFraction: 0.25, twistOffset:  30, taperScale: 1.0 },
+        { heightFraction: 0.5,  twistOffset:  60, taperScale: 1.0 },
+        { heightFraction: 0.75, twistOffset:  90, taperScale: 1.0 },
+        { heightFraction: 1.0,  twistOffset: 120, taperScale: 0.9 },
+      ],
+      troposkein: [
+        { heightFraction: 0.0,  twistOffset: 0, taperScale: 1.8 },
+        { heightFraction: 0.25, twistOffset: 0, taperScale: 1.25 },
+        { heightFraction: 0.5,  twistOffset: 0, taperScale: 1.0 },
+        { heightFraction: 0.75, twistOffset: 0, taperScale: 1.25 },
+        { heightFraction: 1.0,  twistOffset: 0, taperScale: 1.8 },
+      ],
+      straight: [
+        { heightFraction: 0.0,  twistOffset: 0, taperScale: 1.0 },
+        { heightFraction: 0.25, twistOffset: 0, taperScale: 1.0 },
+        { heightFraction: 0.5,  twistOffset: 0, taperScale: 1.0 },
+        { heightFraction: 0.75, twistOffset: 0, taperScale: 1.0 },
+        { heightFraction: 1.0,  twistOffset: 0, taperScale: 1.0 },
+      ],
+      'self-starter': [
+        { heightFraction: 0.0,  twistOffset:  8, taperScale: 1.5 },
+        { heightFraction: 0.25, twistOffset:  5, taperScale: 1.3 },
+        { heightFraction: 0.5,  twistOffset:  0, taperScale: 1.0 },
+        { heightFraction: 0.75, twistOffset: -4, taperScale: 0.85 },
+        { heightFraction: 1.0,  twistOffset: -8, taperScale: 0.65 },
+      ],
+    }
+    const sections = presets[name] ?? presets.straight
     set({ bladeSections: sections })
   },
   resetBladeSections: () => set({ bladeSections: [...DEFAULT_SECTIONS] }),
