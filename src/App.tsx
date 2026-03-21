@@ -150,11 +150,9 @@ export default function App() {
                 <ScrollArea className="flex-1">
                   <div className="p-3 xl:p-4 space-y-5 xl:space-y-6">
                     <ParameterPanel />
-                    {mode === 'draw' && (
-                      <div className="border-t border-border pt-5 xl:pt-6">
-                        <AirfoilSelector />
-                      </div>
-                    )}
+                    <div className="border-t border-border pt-5 xl:pt-6">
+                      <AirfoilSelector />
+                    </div>
                     {mode === 'draw' && (
                       <div className="border-t border-border pt-5 xl:pt-6">
                         <BladeSectionEditor />
@@ -266,6 +264,7 @@ function MobileBottomBar() {
       ]
     : [
         { id: 'params' as const, label: 'Params' },
+        { id: 'airfoil' as const, label: 'Airfoil' },
         { id: 'physics' as const, label: 'Physics' },
       ]
 
@@ -300,7 +299,7 @@ function MobileBottomBar() {
       {open && (
         <div className="max-h-[45vh] overflow-y-auto border-t border-border p-3 sm:p-4">
           {activeTab === 'params' && <ParameterPanel />}
-          {activeTab === 'airfoil' && mode === 'draw' && <AirfoilSelector />}
+          {activeTab === 'airfoil' && <AirfoilSelector />}
           {activeTab === 'section' && mode === 'draw' && <BladeSectionEditor />}
           {activeTab === 'blades' && mode === 'draw' && <BladeSectionStacker />}
           {activeTab === 'physics' && mode === 'view' && <PhysicsDashboard />}

@@ -959,10 +959,10 @@ export default function KaleidoscopeCanvas() {
         }
 
         if (store.symmetryMode === 'snowflake') {
-          // ── Snowflake: tree-branch bilateral fractal per arm ──────────────
+          // ── Snowflake: bilateral arms (no sub-branches) ───────────────────
           for (let b = 0; b < bc; b++) {
             const armAngle = (b / bc) * Math.PI * 2
-            drawSnowflakeArm(ctx, smooth, cx, cy, radius, armAngle, 1.0, 0, 2)
+            drawSnowflakeArm(ctx, smooth, cx, cy, radius, armAngle, 1.0, 0, 0)
           }
         } else {
           const mirrored = mirrorPoints(smooth, bc, cx, cy, radius)
