@@ -2,7 +2,7 @@ import { useRef, useMemo, useCallback, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, ContactShadows, Float, Sky } from '@react-three/drei'
 import * as THREE from 'three'
-import { useTurbineStore, MATERIAL_PRESETS, type MaterialPreset } from '../../stores/turbineStore'
+import { useTurbineStore, MATERIAL_PRESETS, type MaterialPreset, DEFAULT_BAMBOO_CONFIG } from '../../stores/turbineStore'
 import { useThemeStore } from '../../stores/themeStore'
 import { catmullRomSplineWithHandles } from '../../utils/spline'
 import { resolveProfileData, halfThickNorm } from '../../utils/airfoil'
@@ -128,6 +128,116 @@ const NEON_FRAG = /* glsl */`
   }
 `
 
+// ── GLSL Bamboo Shader ────────────────────────────────────────────────────────
+const BAMBOO_VERT = /* glsl */`
+  varying vec3 vWorldNormal;
+  varying vec3 vWorldPosition;
+  varying float vHeight;
+
+  void main() {
+    vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
+    vec4 worldPos = modelMatrix * vec4(position, 1.0);
+    vWorldPosition = worldPos.xyz;
+    vHeight = position.y;
+    gl_Position = projectionMatrix * viewMatrix * worldPos;
+  }
+`
+
+const BAMBOO_FRAG = /* glsl */`
+  uniform vec3  uColorLight;
+  uniform vec3  uColorDark;
+  uniform float uNodeSpacing;
+  uniform float uGrainStrength;
+  uniform int   uPattern;
+  uniform float uShininess;
+  uniform float uOpacity;
+
+  varying vec3 vWorldNormal;
+  varying vec3 vWorldPosition;
+  varying float vHeight;
+
+  // Simple hash for grain noise
+  float hash(float n) { return fract(sin(n) * 43758.5453); }
+  float noise(float x) {
+    float i = floor(x);
+    float f = fract(x);
+    return mix(hash(i), hash(i + 1.0), smoothstep(0.0, 1.0, f));
+  }
+
+  void main() {
+    vec3 viewDir = normalize(cameraPosition - vWorldPosition);
+    vec3 norm = normalize(vWorldNormal);
+
+    // Diffuse lighting
+    float diffuse = abs(dot(norm, normalize(vec3(1.0, 1.5, 0.8)))) * 0.5 + 0.5;
+
+    // Fresnel for shininess
+    float fresnel = 1.0 - abs(dot(norm, viewDir));
+    fresnel = pow(fresnel, 3.0 - uShininess * 2.0);
+
+    float pattern = 0.0;
+    vec3 patternColor = uColorLight;
+
+    if (uPattern == 0) {
+      // Grain: longitudinal fiber lines along height
+      float grain = noise(vWorldPosition.x * 28.0 + vWorldPosition.z * 12.0) * 0.5
+                  + noise(vWorldPosition.x * 60.0 + vWorldPosition.z * 40.0) * 0.25
+                  + noise(vWorldPosition.x * 120.0) * 0.25;
+      float nodeLine = smoothstep(0.06, 0.0, abs(fract(vHeight * uNodeSpacing) - 0.5) - 0.44);
+      pattern = grain * uGrainStrength + nodeLine * 0.6;
+      patternColor = mix(uColorLight, uColorDark, clamp(pattern, 0.0, 1.0));
+
+    } else if (uPattern == 1) {
+      // Nodes: sharp horizontal segment rings with inter-node shading
+      float seg = fract(vHeight * uNodeSpacing);
+      float nodeRing = smoothstep(0.04, 0.0, abs(seg - 0.5) - 0.44);
+      float interNode = pow(sin(seg * 3.14159), 2.0) * 0.35;
+      float grain = noise(vWorldPosition.x * 45.0 + vWorldPosition.z * 22.0) * uGrainStrength * 0.4;
+      pattern = nodeRing * 0.8 + interNode + grain;
+      patternColor = mix(uColorLight, uColorDark, clamp(pattern, 0.0, 1.0));
+
+    } else if (uPattern == 2) {
+      // Rings: concentric ring cross-section pattern
+      float r = length(vec2(vWorldPosition.x, vWorldPosition.z));
+      float rings = abs(sin(r * uNodeSpacing * 6.28 + vHeight * 1.5));
+      float grain = noise(vWorldPosition.x * 50.0 + vWorldPosition.z * 50.0) * uGrainStrength * 0.5;
+      pattern = rings * 0.6 + grain;
+      patternColor = mix(uColorLight, uColorDark, clamp(pattern, 0.0, 1.0));
+
+    } else if (uPattern == 3) {
+      // Weave: diagonal cross-hatch woven bamboo texture
+      float freq = uNodeSpacing * 3.0;
+      float d1 = abs(sin((vWorldPosition.x + vHeight) * freq * 3.14));
+      float d2 = abs(sin((vWorldPosition.x - vHeight) * freq * 3.14));
+      float weave = smoothstep(0.6, 1.0, d1) * 0.5 + smoothstep(0.6, 1.0, d2) * 0.5;
+      float grain = noise((vWorldPosition.x + vWorldPosition.z) * 30.0) * uGrainStrength * 0.3;
+      pattern = weave * 0.7 + grain;
+      patternColor = mix(uColorLight, uColorDark, clamp(pattern, 0.0, 1.0));
+
+    } else {
+      // Lacquer: high-gloss smooth bamboo with subtle grain
+      float grain = noise(vWorldPosition.x * 20.0 + vWorldPosition.z * 8.0) * uGrainStrength * 0.2
+                  + noise(vWorldPosition.x * 80.0) * uGrainStrength * 0.1;
+      float nodeLine = smoothstep(0.03, 0.0, abs(fract(vHeight * uNodeSpacing) - 0.5) - 0.46) * 0.5;
+      pattern = grain + nodeLine;
+      patternColor = mix(uColorLight, uColorDark, clamp(pattern, 0.0, 1.0));
+    }
+
+    // Base shading
+    vec3 finalColor = patternColor * diffuse * 0.85;
+
+    // Specular highlight (shininess)
+    vec3 halfVec = normalize(viewDir + normalize(vec3(1.0, 1.5, 0.8)));
+    float spec = pow(max(dot(norm, halfVec), 0.0), 8.0 + uShininess * 60.0) * uShininess * 0.8;
+    finalColor += vec3(1.0) * spec;
+
+    // Fresnel sheen on edges
+    finalColor += mix(uColorLight, vec3(1.0), 0.5) * fresnel * uShininess * 0.3;
+
+    gl_FragColor = vec4(finalColor, uOpacity);
+  }
+`
+
 function TurbineMesh() {
   const groupRef = useRef<THREE.Group>(null)
   const shaftRef = useRef<THREE.Mesh>(null)
@@ -148,11 +258,12 @@ function TurbineMesh() {
     isTransitioning, transitionProgress, curveSmoothing,
     chordCurve, twistCurve, bladeSections,
     airfoilPreset, customNacaM, customNacaP, customNacaT,
-    neonConfig,
+    neonConfig, bambooConfig,
   } = useTurbineStore()
 
   const isNeonShader = materialPreset === 'neon-shader'
-  const basePreset = isNeonShader ? 'teal-metal' : materialPreset
+  const isBambooShader = materialPreset === 'bamboo-shader'
+  const basePreset = (isNeonShader || isBambooShader) ? 'teal-metal' : materialPreset
   const matConfig = { ...MATERIAL_PRESETS[basePreset as MaterialPreset], ...(materialOverrides[materialPreset] ?? {}) }
 
   // Build geometry from blade curve — closed airfoil cross-section
@@ -287,6 +398,17 @@ function TurbineMesh() {
     uOpacity:      { value: 0.85 },
   }), [])
 
+  // Bamboo shader material uniforms (initialized once, updated live in useFrame)
+  const bambooUniforms = useMemo(() => ({
+    uColorLight:   { value: new THREE.Color(DEFAULT_BAMBOO_CONFIG.colorLight) },
+    uColorDark:    { value: new THREE.Color(DEFAULT_BAMBOO_CONFIG.colorDark) },
+    uNodeSpacing:  { value: DEFAULT_BAMBOO_CONFIG.nodeSpacing },
+    uGrainStrength:{ value: DEFAULT_BAMBOO_CONFIG.grainStrength },
+    uPattern:      { value: DEFAULT_BAMBOO_CONFIG.pattern },
+    uShininess:    { value: DEFAULT_BAMBOO_CONFIG.shininess },
+    uOpacity:      { value: DEFAULT_BAMBOO_CONFIG.opacity },
+  }), [])
+
   // Materials
   const bladeMaterial = useMemo(() => {
     if (isNeonShader) {
@@ -296,6 +418,15 @@ function TurbineMesh() {
         fragmentShader: NEON_FRAG,
         side: THREE.DoubleSide,
         transparent: true,
+      })
+    }
+    if (isBambooShader) {
+      return new THREE.ShaderMaterial({
+        uniforms: bambooUniforms,
+        vertexShader: BAMBOO_VERT,
+        fragmentShader: BAMBOO_FRAG,
+        side: THREE.DoubleSide,
+        transparent: false,
       })
     }
     const transparent = matConfig.transparent || matConfig.opacity < 1
@@ -311,7 +442,7 @@ function TurbineMesh() {
       clearcoat: matConfig.clearcoat ?? 0,
       clearcoatRoughness: 0.2,
     })
-  }, [matConfig, materialPreset, isNeonShader, neonUniforms])
+  }, [matConfig, materialPreset, isNeonShader, neonUniforms, isBambooShader, bambooUniforms])
 
   const wireframeMaterial = useMemo(() => new THREE.MeshBasicMaterial({
     color: '#2dd4bf',
@@ -348,6 +479,18 @@ function TurbineMesh() {
       neonUniforms.uPattern.value = nc.pattern
       neonUniforms.uFresnelPower.value = nc.fresnelPower
       neonUniforms.uOpacity.value = nc.opacity
+    }
+
+    // Update bamboo shader uniforms live
+    if (isBambooShader) {
+      const bc = useTurbineStore.getState().bambooConfig
+      bambooUniforms.uColorLight.value.set(bc.colorLight)
+      bambooUniforms.uColorDark.value.set(bc.colorDark)
+      bambooUniforms.uNodeSpacing.value = bc.nodeSpacing
+      bambooUniforms.uGrainStrength.value = bc.grainStrength
+      bambooUniforms.uPattern.value = bc.pattern
+      bambooUniforms.uShininess.value = bc.shininess
+      bambooUniforms.uOpacity.value = bc.opacity
     }
 
     // Staggered reveal animation
@@ -429,7 +572,7 @@ function TurbineMesh() {
             geometry={geo}
             material={bladeMaterial}
           />
-          {!isNeonShader && <mesh geometry={geo} material={wireframeMaterial} />}
+          {!isNeonShader && !isBambooShader && <mesh geometry={geo} material={wireframeMaterial} />}
         </group>
       ))}
 
@@ -650,29 +793,33 @@ function SmartOrbitControls({ isTransitioning }: { isTransitioning: boolean }) {
 
 export default function TurbineViewer() {
   const { isTransitioning } = useTurbineStore()
+  const { theme } = useThemeStore()
+  const isLight = theme === 'light'
 
   const handleCanvas = useCallback((c: HTMLCanvasElement) => {
     turbineCanvasRef = c
   }, [])
 
+  const glConfig = useMemo(() => ({
+    antialias: true,
+    toneMapping: THREE.ACESFilmicToneMapping,
+    toneMappingExposure: isLight ? 1.3 : 1.1,
+    preserveDrawingBuffer: true,
+  }), [isLight])
+
   return (
     <div className="w-full h-full">
       <Canvas
         camera={{ position: [1.8, 1.6, 1.8], fov: 45, near: 0.1, far: 200 }}
-        gl={{
-          antialias: true,
-          toneMapping: THREE.ACESFilmicToneMapping,
-          toneMappingExposure: 1.1,
-          preserveDrawingBuffer: true,
-        }}
+        gl={glConfig}
         shadows="soft"
       >
         {/* Sky dome — Preetham atmospheric model */}
         <Sky
           distance={450}
           sunPosition={[100, 30, 50]}
-          turbidity={6}
-          rayleigh={0.8}
+          turbidity={isLight ? 4 : 6}
+          rayleigh={isLight ? 0.5 : 0.8}
           mieCoefficient={0.004}
           mieDirectionalG={0.85}
           inclination={0.49}
@@ -680,7 +827,7 @@ export default function TurbineViewer() {
         />
 
         {/* Atmospheric haze toward horizon */}
-        <fog attach="fog" args={['#c8dff0', 18, 80]} />
+        <fog attach="fog" args={[isLight ? '#dbeafe' : '#c8dff0', isLight ? 22 : 18, 80]} />
 
         <SceneCapture />
         <CanvasRefCapture onCanvas={handleCanvas} />

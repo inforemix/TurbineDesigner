@@ -8,8 +8,8 @@ import SideViewCanvas from './components/canvas/SideViewCanvas'
 import TurbineViewer from './components/viewer/TurbineViewer'
 import ParameterPanel from './components/ui/ParameterPanel'
 import PresetBrowser from './components/ui/PresetBrowser'
-import NacaPanel from './components/ui/NacaPanel'
 import PhysicsDashboard from './components/ui/PhysicsDashboard'
+import BladeSectionStacker from './components/ui/BladeSectionStacker'
 import PuzzleHUD from './components/puzzle/PuzzleHUD'
 import ChallengeList from './components/puzzle/ChallengeList'
 import Celebration from './components/puzzle/Celebration'
@@ -70,11 +70,9 @@ export default function App() {
                 <ScrollArea className="flex-1">
                   <div className="p-4 space-y-6">
                     <PresetBrowser />
-                    {mode === 'draw' && (
-                      <div className="border-t border-border pt-6">
-                        <NacaPanel />
-                      </div>
-                    )}
+                    <div className="border-t border-border pt-6">
+                      <BladeSectionStacker />
+                    </div>
                   </div>
                 </ScrollArea>
               </div>

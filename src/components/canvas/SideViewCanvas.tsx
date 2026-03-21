@@ -1,6 +1,8 @@
 import { useRef, useEffect, useCallback } from 'react'
 import { useTurbineStore, type Vec2 } from '../../stores/turbineStore'
 import { sampleCurve } from '../../utils/spline'
+import { getCanvasTheme, type CanvasTheme } from '../../utils/canvasTheme'
+import { useThemeStore } from '../../stores/themeStore'
 
 const PAD_X = 32
 const PAD_Y = 16
@@ -11,6 +13,11 @@ export default function SideViewCanvas() {
   const { chordCurve, setChordCurve, twistCurve, height, bladePoints } = useTurbineStore()
   const dragging = useRef<{ index: number; side: 'left' | 'right' } | null>(null)
 
+  // Cache theme colors — rebuilt only on theme toggle, not every draw
+  const { theme: themeMode } = useThemeStore()
+  const canvasThemeRef = useRef<CanvasTheme>(getCanvasTheme())
+  useEffect(() => { canvasThemeRef.current = getCanvasTheme() }, [themeMode])
+
   const draw = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -19,14 +26,15 @@ export default function SideViewCanvas() {
     const w = canvas.width
     const h = canvas.height
 
+    const theme = canvasThemeRef.current
     ctx.clearRect(0, 0, w, h)
 
     // Background
-    ctx.fillStyle = '#0b0f1e'
+    ctx.fillStyle = theme.bg
     ctx.fillRect(0, 0, w, h)
 
     // Center line
-    ctx.strokeStyle = '#1e2844'
+    ctx.strokeStyle = theme.grid
     ctx.lineWidth = 1
     ctx.setLineDash([4, 4])
     ctx.beginPath()
@@ -36,20 +44,19 @@ export default function SideViewCanvas() {
     ctx.setLineDash([])
 
     // Labels: Root / Tip
-    ctx.fillStyle = '#475569'
+    ctx.fillStyle = theme.textMuted
     ctx.font = '10px monospace'
     ctx.textAlign = 'center'
     ctx.fillText('TIP', w / 2, PAD_Y - 4)
     ctx.fillText('ROOT', w / 2, h - 4)
 
     // Height ticks
-    ctx.fillStyle = '#1e2844'
     for (let i = 0; i <= 4; i++) {
       const yc = PAD_Y + (i / 4) * (h - PAD_Y * 2)
       ctx.beginPath()
       ctx.moveTo(PAD_X / 2, yc)
       ctx.lineTo(w - PAD_X / 2, yc)
-      ctx.strokeStyle = '#1e2844'
+      ctx.strokeStyle = theme.grid
       ctx.lineWidth = 0.5
       ctx.stroke()
     }
@@ -93,10 +100,10 @@ export default function SideViewCanvas() {
     rightEdge.forEach(([x, y], i) => i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y))
     leftEdge.reverse().forEach(([x, y]) => ctx.lineTo(x, y))
     ctx.closePath()
-    ctx.strokeStyle = '#2dd4bf'
+    ctx.strokeStyle = theme.teal
     ctx.lineWidth = 1.5
     ctx.stroke()
-    ctx.fillStyle = '#2dd4bf08'
+    ctx.fillStyle = `${theme.teal}${theme.isLight ? '18' : '08'}`
     ctx.fill()
 
     // Control point handles
@@ -109,18 +116,18 @@ export default function SideViewCanvas() {
       // Right handle
       ctx.beginPath()
       ctx.arc(w / 2 + chord, yc, rr, 0, Math.PI * 2)
-      ctx.fillStyle = isDragging && dragging.current?.side === 'right' ? '#fff' : '#2dd4bf'
+      ctx.fillStyle = isDragging && dragging.current?.side === 'right' ? '#fff' : theme.teal
       ctx.fill()
-      ctx.strokeStyle = '#0b0f1e'
+      ctx.strokeStyle = theme.bg
       ctx.lineWidth = 1.5
       ctx.stroke()
 
       // Left handle
       ctx.beginPath()
       ctx.arc(w / 2 - chord, yc, rr, 0, Math.PI * 2)
-      ctx.fillStyle = isDragging && dragging.current?.side === 'left' ? '#fff' : '#2dd4bf'
+      ctx.fillStyle = isDragging && dragging.current?.side === 'left' ? '#fff' : theme.teal
       ctx.fill()
-      ctx.strokeStyle = '#0b0f1e'
+      ctx.strokeStyle = theme.bg
       ctx.lineWidth = 1.5
       ctx.stroke()
 
@@ -128,7 +135,7 @@ export default function SideViewCanvas() {
       ctx.beginPath()
       ctx.moveTo(w / 2 - chord, yc)
       ctx.lineTo(w / 2 + chord, yc)
-      ctx.strokeStyle = '#2dd4bf40'
+      ctx.strokeStyle = `${theme.teal}55`
       ctx.lineWidth = 1
       ctx.stroke()
     })

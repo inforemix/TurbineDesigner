@@ -2,6 +2,8 @@ import { useRef, useEffect, useCallback, useState } from 'react'
 import { useTurbineStore, type Vec2 } from '../../stores/turbineStore'
 import { catmullRomSplineWithHandles, crAutoTangent, mirrorPoints } from '../../utils/spline'
 import { Bezier } from 'bezier-js'
+import { getCanvasTheme, type CanvasTheme } from '../../utils/canvasTheme'
+import { useThemeStore } from '../../stores/themeStore'
 
 /* ------------------------------------------------------------------ */
 /*  Snowflake tree-branch renderer                                     */
@@ -458,6 +460,11 @@ interface HandleDrag { index: number; side: 'out' | 'in' }
 
 export default function KaleidoscopeCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  // Cache theme colors — rebuilt only when theme toggles, not every frame
+  const { theme: themeMode } = useThemeStore()
+  const canvasThemeRef = useRef<CanvasTheme>(getCanvasTheme())
+  useEffect(() => { canvasThemeRef.current = getCanvasTheme() }, [themeMode])
+
   const [isDrawing, setIsDrawing] = useState(false)
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [dragHandle, setDragHandle] = useState<HandleDrag | null>(null)
@@ -545,13 +552,9 @@ export default function KaleidoscopeCanvas() {
 
   const pixelToNormalized = useCallback((px: Vec2, canvas: HTMLCanvasElement): Vec2 => {
     const { cx, cy, radius } = cssScale(canvas)
-    const dx = px.x - cx
-    const dy = px.y - cy
-    const dist = Math.sqrt(dx * dx + dy * dy)
-    const angle = Math.atan2(dy, dx)
     return {
-      x: snapVal(Math.min(1, dist / radius)),
-      y: snapVal(Math.max(-0.5, Math.min(0.5, (angle / (2 * Math.PI)) * 0.4))),
+      x: snapVal(Math.max(0, Math.min(1, (px.x - cx) / radius))),
+      y: snapVal(Math.max(0, Math.min(0.5, Math.abs((px.y - cy) / radius)))),
     }
   }, [snapVal])
 
@@ -888,13 +891,14 @@ export default function KaleidoscopeCanvas() {
       const cy = h / 2
       const radius = Math.min(cx, cy) * 0.75
 
+      const theme = canvasThemeRef.current
       ctx.clearRect(0, 0, w, h)
 
       // Background
       const bgGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 1.4)
-      bgGrad.addColorStop(0, 'rgba(15, 22, 40, 1)')
-      bgGrad.addColorStop(0.7, 'rgba(10, 14, 26, 1)')
-      bgGrad.addColorStop(1, 'rgba(10, 14, 26, 1)')
+      bgGrad.addColorStop(0, theme.surface)
+      bgGrad.addColorStop(0.7, theme.bg)
+      bgGrad.addColorStop(1, theme.bg)
       ctx.fillStyle = bgGrad
       ctx.fillRect(0, 0, w, h)
 
@@ -903,7 +907,7 @@ export default function KaleidoscopeCanvas() {
 
       // Snap grid dots
       if (snap) {
-        ctx.fillStyle = 'rgba(45, 212, 191, 0.06)'
+        ctx.fillStyle = theme.isLight ? `${theme.teal}28` : 'rgba(45, 212, 191, 0.06)'
         for (let gx = 0; gx <= 1.0; gx += 0.05) {
           for (let gy = 0; gy <= 0.5; gy += 0.05) {
             const wx = cx + gx * radius
@@ -916,7 +920,7 @@ export default function KaleidoscopeCanvas() {
       }
 
       // Grid rings
-      ctx.strokeStyle = 'rgba(45, 212, 191, 0.08)'
+      ctx.strokeStyle = theme.isLight ? `${theme.teal}30` : 'rgba(45, 212, 191, 0.08)'
       ctx.lineWidth = 1
       for (let r = 0.25; r <= 1; r += 0.25) {
         ctx.beginPath()
@@ -925,7 +929,7 @@ export default function KaleidoscopeCanvas() {
       }
 
       // Radial lines (one per blade)
-      ctx.strokeStyle = 'rgba(45, 212, 191, 0.06)'
+      ctx.strokeStyle = theme.isLight ? `${theme.teal}22` : 'rgba(45, 212, 191, 0.06)'
       for (let i = 0; i < bc; i++) {
         const angle = (i / bc) * Math.PI * 2
         ctx.beginPath()
@@ -1289,7 +1293,7 @@ export default function KaleidoscopeCanvas() {
       // Point count warning
       if (pts.length >= MAX_POINTS) {
         ctx.font = '10px monospace'
-        ctx.fillStyle = 'rgba(251,191,36,0.8)'
+        ctx.fillStyle = theme.isLight ? 'rgba(161,98,7,0.9)' : 'rgba(251,191,36,0.8)'
         ctx.textAlign = 'center'
         ctx.fillText(`Max ${MAX_POINTS} points reached`, cx, h - 16)
         ctx.textAlign = 'left'

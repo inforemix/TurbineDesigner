@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useTurbineStore, type BloomTier, type SymmetryMode, type MaterialPreset, MATERIAL_PRESETS, type NeonPattern, type MaterialConfig } from '../../stores/turbineStore'
+import { useTurbineStore, type BloomTier, type SymmetryMode, type MaterialPreset, MATERIAL_PRESETS, type NeonPattern, type BambooPattern, type MaterialConfig } from '../../stores/turbineStore'
 import DistributionEditor from './DistributionEditor'
 import { Slider } from './slider'
 import { Button } from './button'
@@ -109,6 +109,7 @@ export default function ParameterPanel() {
     materialPreset, setMaterialPreset,
     materialOverrides, setMaterialOverride, resetMaterialOverride,
     neonConfig, setNeonConfig,
+    bambooConfig, setBambooConfig,
     curveSmoothing, setCurveSmoothing,
     mode,
     chordCurve, setChordCurve,
@@ -299,19 +300,25 @@ export default function ParameterPanel() {
                 const isNeon = key === 'neon-shader'
                 const ov = materialOverrides[key] ?? {}
                 const swatchColor = ov.color ?? mat.color
+                const isBamboo = key === 'bamboo-shader'
                 return (
                   <button
                     key={key}
                     onClick={() => setMaterialPreset(key)}
                     className={`py-2 px-2.5 rounded-lg text-[10px] font-semibold transition-all flex items-center gap-2 border ${
                       materialPreset === key
-                        ? isNeon ? 'bg-violet-500/20 text-violet-300 border-violet-400/50 shadow-sm' : 'bg-teal/30 text-teal border-teal/40 shadow-sm'
+                        ? isNeon ? 'bg-violet-500/20 text-violet-300 border-violet-400/50 shadow-sm'
+                          : isBamboo ? 'bg-green-700/20 text-green-300 border-green-600/50 shadow-sm'
+                          : 'bg-teal/30 text-teal border-teal/40 shadow-sm'
                         : 'bg-secondary/50 text-muted-foreground hover:bg-secondary hover:border-teal/30'
                     }`}
                   >
                     {isNeon ? (
                       <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-white/10"
                         style={{ background: `linear-gradient(135deg, ${neonConfig.colorA}, ${neonConfig.rimColor})` }} />
+                    ) : isBamboo ? (
+                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-white/10"
+                        style={{ background: `linear-gradient(135deg, ${bambooConfig.colorLight}, ${bambooConfig.colorDark})` }} />
                     ) : (
                       <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-white/10"
                         style={{ background: swatchColor }} />
@@ -323,7 +330,7 @@ export default function ParameterPanel() {
             </div>
 
             {/* ── Material config panel — shown for the active preset ── */}
-            {materialPreset !== 'neon-shader' && (() => {
+            {materialPreset !== 'neon-shader' && materialPreset !== 'bamboo-shader' && (() => {
               const base = MATERIAL_PRESETS[materialPreset]
               const ov = materialOverrides[materialPreset] ?? {}
               const eff: MaterialConfig = { ...base, ...ov }
@@ -420,6 +427,51 @@ export default function ParameterPanel() {
                 <ParamSlider label="Frequency"   value={neonConfig.pulseFreq}   min={1} max={24}  step={0.5}  onChange={v => setNeonConfig({ pulseFreq: v })} />
                 <ParamSlider label="Glow Edge"   value={neonConfig.fresnelPower} min={0.5} max={5} step={0.1} onChange={v => setNeonConfig({ fresnelPower: v })} />
                 <ParamSlider label="Opacity"     value={neonConfig.opacity}     min={0.1} max={1}  step={0.01} onChange={v => setNeonConfig({ opacity: v })} />
+              </div>
+            )}
+
+            {/* Bamboo Shader config */}
+            {materialPreset === 'bamboo-shader' && (
+              <div className="flex flex-col gap-3 p-3 rounded-xl border border-green-600/20 bg-green-700/5">
+                <div className="text-[9px] uppercase tracking-widest text-green-400 font-semibold">Bamboo Config</div>
+
+                <div className="flex gap-2">
+                  {([
+                    { key: 'colorLight', label: 'Light' },
+                    { key: 'colorDark',  label: 'Dark' },
+                  ] as { key: 'colorLight' | 'colorDark'; label: string }[]).map(({ key, label }) => (
+                    <label key={key} className="flex flex-col items-center gap-1 cursor-pointer flex-1">
+                      <div className="relative w-full h-7 rounded-lg overflow-hidden border border-white/10"
+                        style={{ background: bambooConfig[key] }}>
+                        <input type="color" value={bambooConfig[key]}
+                          onChange={e => setBambooConfig({ [key]: e.target.value })}
+                          className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+                      </div>
+                      <span className="text-[8px] text-text-muted">{label}</span>
+                    </label>
+                  ))}
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[9px] text-text-muted uppercase tracking-wider">Pattern</span>
+                  <div className="grid grid-cols-5 gap-1">
+                    {(['Grain', 'Nodes', 'Rings', 'Weave', 'Lacquer'] as const).map((name, idx) => (
+                      <button key={idx} onClick={() => setBambooConfig({ pattern: idx as BambooPattern })}
+                        className={`py-1 rounded-md text-[8px] font-medium transition-all border ${
+                          bambooConfig.pattern === idx
+                            ? 'border-green-500/60 bg-green-600/25 text-green-300'
+                            : 'border-border/30 bg-surface/50 text-text-muted hover:border-green-500/30 hover:text-green-400'
+                        }`}>
+                        {name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <ParamSlider label="Node Spacing" value={bambooConfig.nodeSpacing}   min={1} max={10}  step={0.1}  onChange={v => setBambooConfig({ nodeSpacing: v })} />
+                <ParamSlider label="Grain"        value={bambooConfig.grainStrength} min={0} max={1}   step={0.01} onChange={v => setBambooConfig({ grainStrength: v })} />
+                <ParamSlider label="Shininess"    value={bambooConfig.shininess}     min={0} max={1}   step={0.01} onChange={v => setBambooConfig({ shininess: v })} />
+                <ParamSlider label="Opacity"      value={bambooConfig.opacity}       min={0.1} max={1} step={0.01} onChange={v => setBambooConfig({ opacity: v })} />
               </div>
             )}
           </div>
