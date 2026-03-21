@@ -793,29 +793,33 @@ function SmartOrbitControls({ isTransitioning }: { isTransitioning: boolean }) {
 
 export default function TurbineViewer() {
   const { isTransitioning } = useTurbineStore()
+  const { theme } = useThemeStore()
+  const isLight = theme === 'light'
 
   const handleCanvas = useCallback((c: HTMLCanvasElement) => {
     turbineCanvasRef = c
   }, [])
 
+  const glConfig = useMemo(() => ({
+    antialias: true,
+    toneMapping: THREE.ACESFilmicToneMapping,
+    toneMappingExposure: isLight ? 1.3 : 1.1,
+    preserveDrawingBuffer: true,
+  }), [isLight])
+
   return (
     <div className="w-full h-full">
       <Canvas
         camera={{ position: [1.8, 1.6, 1.8], fov: 45, near: 0.1, far: 200 }}
-        gl={{
-          antialias: true,
-          toneMapping: THREE.ACESFilmicToneMapping,
-          toneMappingExposure: 1.1,
-          preserveDrawingBuffer: true,
-        }}
+        gl={glConfig}
         shadows="soft"
       >
         {/* Sky dome — Preetham atmospheric model */}
         <Sky
           distance={450}
           sunPosition={[100, 30, 50]}
-          turbidity={6}
-          rayleigh={0.8}
+          turbidity={isLight ? 4 : 6}
+          rayleigh={isLight ? 0.5 : 0.8}
           mieCoefficient={0.004}
           mieDirectionalG={0.85}
           inclination={0.49}
@@ -823,7 +827,7 @@ export default function TurbineViewer() {
         />
 
         {/* Atmospheric haze toward horizon */}
-        <fog attach="fog" args={['#c8dff0', 18, 80]} />
+        <fog attach="fog" args={[isLight ? '#dbeafe' : '#c8dff0', isLight ? 22 : 18, 80]} />
 
         <SceneCapture />
         <CanvasRefCapture onCanvas={handleCanvas} />

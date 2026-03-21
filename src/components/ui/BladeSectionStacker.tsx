@@ -1,31 +1,22 @@
-import { useTurbineStore } from '../../stores/turbineStore'
+import { useTurbineStore, type BladeSection } from '../../stores/turbineStore'
 
-// ── Tiny SVG side-view of blade sections ────────────────────────────────────
-function SectionSideView() {
-  const { bladeSections, twist } = useTurbineStore()
-
+function SectionSideView({ bladeSections, twist }: { bladeSections: BladeSection[]; twist: number }) {
   const W = 200
   const H = 220
   const marginX = 28
   const marginY = 12
 
-  // Sort root→tip
   const sorted = [...bladeSections].sort((a, b) => a.heightFraction - b.heightFraction)
-
-  // Max taperScale for normalising the chord bars
   const maxScale = Math.max(...sorted.map(s => s.taperScale), 1.0)
 
   return (
     <svg width={W} height={H} className="mx-auto block">
-      {/* Axis line */}
       <line
         x1={marginX} y1={marginY}
-        x1End={marginX} y2={H - marginY}
         x2={marginX} y2={H - marginY}
         stroke="rgba(45,212,191,0.2)" strokeWidth={1}
       />
 
-      {/* Height tick labels */}
       {sorted.map((sec, i) => {
         const y = marginY + (1 - sec.heightFraction) * (H - marginY * 2)
         return (
@@ -35,9 +26,8 @@ function SectionSideView() {
         )
       })}
 
-      {/* Section chord bars */}
       {sorted.map((sec, i) => {
-        const y   = marginY + (1 - sec.heightFraction) * (H - marginY * 2)
+        const y = marginY + (1 - sec.heightFraction) * (H - marginY * 2)
         const barW = (sec.taperScale / maxScale) * (W - marginX - 16)
         const twistVisual = (twist * sec.heightFraction + sec.twistOffset) * 0.35
         const isRoot = sec.heightFraction === 0
@@ -45,7 +35,6 @@ function SectionSideView() {
 
         return (
           <g key={i} transform={`rotate(${twistVisual}, ${marginX}, ${y})`}>
-            {/* Filled airfoil-like bar */}
             <rect
               x={marginX}
               y={y - 4}
@@ -56,13 +45,11 @@ function SectionSideView() {
               stroke="rgba(45,212,191,0.55)"
               strokeWidth={1.2}
             />
-            {/* Leading-edge highlight dot */}
             <circle cx={marginX + 3} cy={y} r={2} fill="#2dd4bf" opacity={0.7} />
           </g>
         )
       })}
 
-      {/* Connect centre-line dots root→tip */}
       {sorted.length >= 2 && (
         <polyline
           points={sorted.map(sec => {
@@ -76,14 +63,12 @@ function SectionSideView() {
         />
       )}
 
-      {/* Tip / Root labels */}
       <text x={marginX + 4} y={marginY - 2} fontSize={7} fill="rgba(148,163,184,0.5)">tip</text>
       <text x={marginX + 4} y={H - 2}       fontSize={7} fill="rgba(148,163,184,0.5)">root</text>
     </svg>
   )
 }
 
-// ── Inline slider row ────────────────────────────────────────────────────────
 function MiniSlider({
   label, value, min, max, step, unit, onChange,
 }: {
@@ -105,10 +90,10 @@ function MiniSlider({
   )
 }
 
-// ── Main component ───────────────────────────────────────────────────────────
 export default function BladeSectionStacker() {
   const {
     bladeSections,
+    twist,
     updateBladeSection,
     addBladeSection,
     removeBladeSection,
@@ -129,8 +114,6 @@ export default function BladeSectionStacker() {
 
   return (
     <div className="flex flex-col gap-4">
-
-      {/* ── Section header ── */}
       <div className="flex items-center justify-between">
         <span className="text-[10px] uppercase tracking-widest text-text-muted font-semibold">
           Blade Sections
@@ -143,7 +126,6 @@ export default function BladeSectionStacker() {
         </button>
       </div>
 
-      {/* ── One-click presets ── */}
       <div className="grid grid-cols-2 gap-1.5">
         {PRESETS.map(p => (
           <button
@@ -157,12 +139,10 @@ export default function BladeSectionStacker() {
         ))}
       </div>
 
-      {/* ── Side-view preview ── */}
       <div className="rounded-xl border border-border/30 bg-surface/30 overflow-hidden pt-2 pb-1">
-        <SectionSideView />
+        <SectionSideView bladeSections={bladeSections} twist={twist} />
       </div>
 
-      {/* ── Section rows (root first) ── */}
       <div className="flex flex-col gap-2">
         {sorted.map((sec) => {
           const heightPct = (sec.heightFraction * 100).toFixed(0)
@@ -174,7 +154,6 @@ export default function BladeSectionStacker() {
               key={sec.idx}
               className="rounded-xl border border-border/30 bg-surface/40 p-2.5 flex flex-col gap-1.5"
             >
-              {/* Row header */}
               <div className="flex items-center justify-between mb-0.5">
                 <span className="text-[9px] font-semibold text-teal/80 uppercase tracking-wider">{label}</span>
                 {bladeSections.length > 2 && sec.heightFraction !== 0 && sec.heightFraction !== 1 && (
@@ -187,7 +166,6 @@ export default function BladeSectionStacker() {
                 )}
               </div>
 
-              {/* Height (editable for non-endpoint sections) */}
               {sec.heightFraction !== 0 && sec.heightFraction !== 1 && (
                 <MiniSlider
                   label="Height" value={sec.heightFraction * 100} min={1} max={99} step={1} unit="%"
@@ -195,13 +173,11 @@ export default function BladeSectionStacker() {
                 />
               )}
 
-              {/* Chord scale */}
               <MiniSlider
                 label="Chord" value={sec.taperScale} min={0.3} max={2.5} step={0.05} unit="×"
                 onChange={v => updateBladeSection(sec.idx, { taperScale: v })}
               />
 
-              {/* Twist offset */}
               <MiniSlider
                 label="Twist" value={sec.twistOffset} min={-180} max={180} step={1} unit="°"
                 onChange={v => updateBladeSection(sec.idx, { twistOffset: v })}
@@ -211,7 +187,6 @@ export default function BladeSectionStacker() {
         })}
       </div>
 
-      {/* ── Add section ── */}
       <button
         onClick={addBladeSection}
         className="w-full py-1.5 rounded-lg border border-dashed border-teal/30 text-[9px] text-teal/60
