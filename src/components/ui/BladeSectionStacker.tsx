@@ -20,7 +20,7 @@ function SectionSideView({ bladeSections, twist }: { bladeSections: BladeSection
       {sorted.map((sec, i) => {
         const y = marginY + (1 - sec.heightFraction) * (H - marginY * 2)
         return (
-          <text key={i} x={2} y={y + 3.5} fontSize={7} fill="rgba(148,163,184,0.7)" textAnchor="start">
+          <text key={i} x={2} y={y + 3.5} fontSize={10} fill="rgba(148,163,184,0.7)" textAnchor="start">
             {(sec.heightFraction * 100).toFixed(0)}%
           </text>
         )
@@ -63,8 +63,8 @@ function SectionSideView({ bladeSections, twist }: { bladeSections: BladeSection
         />
       )}
 
-      <text x={marginX + 4} y={marginY - 2} fontSize={7} fill="rgba(148,163,184,0.5)">tip</text>
-      <text x={marginX + 4} y={H - 2}       fontSize={7} fill="rgba(148,163,184,0.5)">root</text>
+      <text x={marginX + 4} y={marginY - 2} fontSize={10} fill="rgba(148,163,184,0.5)">tip</text>
+      <text x={marginX + 4} y={H - 2}       fontSize={10} fill="rgba(148,163,184,0.5)">root</text>
     </svg>
   )
 }
@@ -76,14 +76,14 @@ function MiniSlider({
   onChange: (v: number) => void
 }) {
   return (
-    <div className="flex items-center gap-1.5">
-      <span className="text-[8px] text-text-muted w-9 shrink-0 uppercase tracking-wide">{label}</span>
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-text-muted min-w-fit shrink-0 uppercase tracking-wide">{label}</span>
       <input
         type="range" min={min} max={max} step={step} value={value}
         onChange={e => onChange(parseFloat(e.target.value))}
-        className="flex-1 h-1 accent-teal cursor-pointer"
+        className="flex-1 h-1.5 accent-teal cursor-pointer"
       />
-      <span className="text-[8px] font-mono text-teal w-8 text-right shrink-0">
+      <span className="text-xs font-mono text-teal min-w-fit text-right shrink-0">
         {value.toFixed(step < 1 ? 1 : 0)}{unit ?? ''}
       </span>
     </div>
@@ -115,12 +115,12 @@ export default function BladeSectionStacker() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] uppercase tracking-widest text-text-muted font-semibold">
+        <span className="text-xs uppercase tracking-widest text-text-muted font-semibold">
           Blade Sections
         </span>
         <button
           onClick={resetBladeSections}
-          className="text-[9px] text-text-muted hover:text-amber-400 transition-colors px-1.5 py-0.5 rounded border border-border/40 hover:border-amber-400/30"
+          className="h-8 text-xs text-text-muted hover:text-amber-400 transition-colors px-2.5 rounded border border-border/40 hover:border-amber-400/30 flex items-center"
         >
           Reset
         </button>
@@ -132,7 +132,7 @@ export default function BladeSectionStacker() {
             key={p.key}
             title={p.title}
             onClick={() => loadSectionPreset(p.key)}
-            className={`px-2 py-1.5 rounded-lg text-[9px] font-semibold border transition-all hover:opacity-90 ${p.color}`}
+            className={`h-10 px-3 rounded-lg text-xs font-semibold border transition-all hover:opacity-90 flex items-center justify-center ${p.color}`}
           >
             {p.label}
           </button>
@@ -155,11 +155,11 @@ export default function BladeSectionStacker() {
               className="rounded-xl border border-border/30 bg-surface/40 p-2.5 flex flex-col gap-1.5"
             >
               <div className="flex items-center justify-between mb-0.5">
-                <span className="text-[9px] font-semibold text-teal/80 uppercase tracking-wider">{label}</span>
+                <span className="text-xs font-semibold text-teal/80 uppercase tracking-wider">{label}</span>
                 {bladeSections.length > 2 && sec.heightFraction !== 0 && sec.heightFraction !== 1 && (
                   <button
                     onClick={() => removeBladeSection(sec.idx)}
-                    className="text-[9px] text-text-muted hover:text-red-400 transition-colors leading-none"
+                    className="text-xs text-text-muted hover:text-red-400 transition-colors leading-none"
                   >
                     ✕
                   </button>
@@ -189,8 +189,8 @@ export default function BladeSectionStacker() {
 
       <button
         onClick={addBladeSection}
-        className="w-full py-1.5 rounded-lg border border-dashed border-teal/30 text-[9px] text-teal/60
-          hover:border-teal/60 hover:text-teal transition-all font-semibold tracking-wide"
+        className="w-full h-10 rounded-lg border border-dashed border-teal/30 text-xs text-teal/60
+          hover:border-teal/60 hover:text-teal transition-all font-semibold tracking-wide flex items-center justify-center"
       >
         + Add Section
       </button>

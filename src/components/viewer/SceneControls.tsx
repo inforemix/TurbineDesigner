@@ -20,7 +20,7 @@ export default function SceneControls() {
       <button
         onClick={() => setOpen(o => !o)}
         title="Scene Settings"
-        className={`w-9 h-9 rounded-xl flex items-center justify-center text-base transition-all border shadow-md backdrop-blur-md ${
+        className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg transition-all border shadow-md backdrop-blur-md ${
           open
             ? 'bg-amber-500/30 border-amber-400/60 text-amber-300 shadow-amber-500/20'
             : 'bg-card/80 border-border/60 text-muted-foreground hover:bg-card hover:text-foreground hover:border-border'
@@ -35,30 +35,30 @@ export default function SceneControls() {
           style={{ width: '272px' }}>
           {/* Header */}
           <div className="flex items-center justify-between px-3 py-2.5 border-b border-border/50">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-foreground">Scene</span>
+            <span className="text-sm font-bold uppercase tracking-wider text-foreground">Scene</span>
             <button onClick={() => setOpen(false)}
-              className="text-muted-foreground hover:text-foreground transition-colors text-xs px-1">✕</button>
+              className="text-muted-foreground hover:text-foreground transition-colors text-sm px-1">✕</button>
           </div>
 
           <div className="p-3 flex flex-col gap-3 max-h-[75vh] overflow-y-auto">
 
             {/* ── Sky Presets ────────────────────────────────────── */}
             <div>
-              <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">Weather</p>
-              <div className="flex gap-1">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-2">Weather</p>
+              <div className="flex gap-1.5">
                 {(['sunny', 'cloudy', 'sunset', 'stormy', 'night'] as SkyPreset[]).map(preset => (
                   <button
                     key={preset}
                     onClick={() => setEnvironmentConfig({ skyPreset: preset })}
                     title={preset}
-                    className={`flex-1 flex flex-col items-center gap-0.5 py-1.5 rounded-lg text-[9px] font-medium transition-all border ${
+                    className={`flex-1 h-10 flex flex-col items-center justify-center gap-1 rounded-lg text-xs font-medium transition-all border ${
                       environmentConfig.skyPreset === preset
                         ? 'bg-amber-500/25 border-amber-400/60 text-amber-300'
                         : 'bg-secondary/40 border-border/40 text-muted-foreground hover:bg-secondary hover:border-border'
                     }`}
                   >
-                    <span className="text-sm leading-none">{SKY_ICONS[preset]}</span>
-                    <span className="capitalize">{preset}</span>
+                    <span className="text-lg leading-none">{SKY_ICONS[preset]}</span>
+                    <span className="capitalize text-[10px]">{preset}</span>
                   </button>
                 ))}
               </div>
@@ -67,8 +67,8 @@ export default function SceneControls() {
             {/* ── Cloud Intensity ────────────────────────────────── */}
             <div>
               <div className="flex justify-between mb-1.5">
-                <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold">Cloud Intensity</p>
-                <span className="text-[9px] font-mono text-amber-400 font-bold">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Cloud Intensity</p>
+                <span className="text-xs font-mono text-amber-400 font-bold">
                   {Math.round(environmentConfig.cloudIntensity * 100)}%
                 </span>
               </div>
@@ -82,7 +82,7 @@ export default function SceneControls() {
 
             {/* ── Ground Texture ─────────────────────────────────── */}
             <div>
-              <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">Ground Texture</p>
+              <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">Ground Texture</p>
               <div className="grid grid-cols-5 gap-1">
                 {(['grass', 'sand', 'dirt', 'concrete', 'rock'] as GroundTexture[]).map(texture => (
                   <button
@@ -91,7 +91,7 @@ export default function SceneControls() {
                       groundTexture: texture,
                       groundColor: GROUND_COLORS[texture][2],
                     })}
-                    className={`py-1 rounded text-[8px] font-medium transition-all border capitalize ${
+                    className={`h-9 rounded text-xs font-medium transition-all border capitalize flex items-center justify-center ${
                       environmentConfig.groundTexture === texture
                         ? 'bg-emerald-600/30 border-emerald-500/60 text-emerald-300'
                         : 'bg-secondary/40 border-border/40 text-muted-foreground hover:bg-secondary hover:border-border'
@@ -105,7 +105,7 @@ export default function SceneControls() {
 
             {/* ── Ground Color ───────────────────────────────────── */}
             <div>
-              <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">Ground Color</p>
+              <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">Ground Color</p>
               <div className="flex gap-1.5">
                 {GROUND_COLORS[environmentConfig.groundTexture].map((color, i) => (
                   <button
@@ -126,8 +126,8 @@ export default function SceneControls() {
             {/* ── Color Variation ────────────────────────────────── */}
             <div>
               <div className="flex justify-between mb-1.5">
-                <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold">Variation</p>
-                <span className="text-[9px] font-mono text-emerald-400 font-bold">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Variation</p>
+                <span className="text-xs font-mono text-emerald-400 font-bold">
                   {Math.round(environmentConfig.groundColorVariation * 100)}%
                 </span>
               </div>

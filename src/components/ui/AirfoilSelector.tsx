@@ -63,7 +63,7 @@ export default function AirfoilSelector() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] uppercase tracking-widest text-text-muted font-semibold">Airfoil Profile</span>
+        <span className="text-xs uppercase tracking-widest text-text-muted font-semibold">Airfoil Profile</span>
       </div>
 
       {/* 4 preset tiles in 2×2 grid */}
@@ -76,14 +76,14 @@ export default function AirfoilSelector() {
               key={key}
               onClick={() => selectPreset(key)}
               title={info.description}
-              className={`flex flex-col items-center gap-1 p-2 rounded-lg border transition-all ${
+              className={`flex flex-col items-center gap-1.5 p-3 rounded-lg border transition-all ${
                 active
                   ? 'border-teal/50 bg-teal/10 text-teal'
                   : 'border-border/40 bg-surface/60 text-text-dim hover:border-teal/30 hover:text-teal/80'
               }`}
             >
               <ProfileSVG m={info.m} p={info.p} t={info.t} active={active} />
-              <span className="text-[9px] font-semibold tracking-wide">{info.label}</span>
+              <span className="text-xs font-semibold tracking-wide">{info.label}</span>
             </button>
           )
         })}
@@ -92,7 +92,7 @@ export default function AirfoilSelector() {
       {/* Custom tile */}
       <button
         onClick={() => selectPreset('custom')}
-        className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-[10px] font-medium ${
+        className={`w-full h-10 flex items-center gap-2 px-3 rounded-lg border transition-all text-sm font-medium ${
           airfoilPreset === 'custom'
             ? 'border-violet-400/50 bg-violet-400/10 text-violet-400'
             : 'border-border/40 bg-surface/60 text-text-dim hover:border-violet-400/30 hover:text-violet-400'
@@ -126,12 +126,12 @@ export default function AirfoilSelector() {
           {!showSaveInput ? (
             <button
               onClick={() => setShowSaveInput(true)}
-              className="w-full text-[9px] py-1 rounded border border-border/30 text-text-muted hover:text-violet-400 hover:border-violet-400/30 transition-colors"
+              className="w-full h-9 rounded border border-border/30 text-text-muted hover:text-violet-400 hover:border-violet-400/30 transition-colors text-sm"
             >
               + Save as my profile
             </button>
           ) : (
-            <div className="flex gap-1">
+            <div className="flex gap-1.5">
               <input
                 autoFocus
                 value={saveName}
@@ -146,7 +146,7 @@ export default function AirfoilSelector() {
                     setShowSaveInput(false)
                   }
                 }}
-                className="flex-1 text-[9px] px-2 py-1 rounded bg-background border border-border/40 text-foreground outline-none focus:border-violet-400/50"
+                className="flex-1 h-9 px-3 rounded bg-background border border-border/40 text-foreground outline-none focus:border-violet-400/50 text-sm"
               />
               <button
                 onClick={() => {
@@ -156,7 +156,7 @@ export default function AirfoilSelector() {
                     setShowSaveInput(false)
                   }
                 }}
-                className="px-2 py-1 rounded bg-violet-400/20 text-violet-400 text-[9px] hover:bg-violet-400/30 transition-colors"
+                className="h-9 px-3 rounded bg-violet-400/20 text-violet-400 text-sm hover:bg-violet-400/30 transition-colors"
               >
                 Save
               </button>
@@ -167,23 +167,23 @@ export default function AirfoilSelector() {
 
       {/* Saved custom profiles */}
       {customAirfoils.length > 0 && (
-        <div className="space-y-1">
-          <div className="text-[8px] uppercase tracking-widest text-text-muted px-0.5">Saved</div>
+        <div className="space-y-1.5">
+          <div className="text-xs uppercase tracking-widest text-text-muted px-0.5">Saved</div>
           {customAirfoils.map(a => (
-            <div key={a.name} className="group flex items-center gap-1">
+            <div key={a.name} className="group flex items-center gap-1.5">
               <button
                 onClick={() => loadCustom(a)}
-                className="flex-1 flex items-center gap-2 px-2 py-1.5 rounded-lg border border-border/30 bg-surface/40 text-text-dim hover:text-violet-400 hover:border-violet-400/30 transition-colors text-[9px]"
+                className="flex-1 h-10 flex items-center gap-2 px-3 rounded-lg border border-border/30 bg-surface/40 text-text-dim hover:text-violet-400 hover:border-violet-400/30 transition-colors text-sm"
               >
                 <ProfileSVG m={a.m} p={a.p} t={a.t} active={false} />
                 {a.name}
-                <span className="ml-auto text-[8px] text-text-muted">
+                <span className="ml-auto text-xs text-text-muted">
                   {Math.round(a.t * 100)}%t
                 </span>
               </button>
               <button
                 onClick={() => deleteCustomAirfoil(a.name)}
-                className="opacity-0 group-hover:opacity-100 w-5 h-5 rounded flex items-center justify-center text-[9px] text-text-muted hover:text-red-400 transition-all"
+                className="opacity-0 group-hover:opacity-100 w-6 h-6 rounded flex items-center justify-center text-sm text-text-muted hover:text-red-400 transition-all"
               >
                 ✕
               </button>
@@ -193,10 +193,10 @@ export default function AirfoilSelector() {
       )}
 
       {/* Blade thickness scale */}
-      <div className="pt-1 border-t border-border/20">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-[9px] text-text-muted">Blade thickness</span>
-          <span className="text-[9px] text-teal font-mono">{Math.round(thickness * 100)}%</span>
+      <div className="pt-2 border-t border-border/20">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs text-text-muted">Blade thickness</span>
+          <span className="text-xs text-teal font-mono">{Math.round(thickness * 100)}%</span>
         </div>
         <input
           type="range"
@@ -220,9 +220,9 @@ function NacaSlider({
 }) {
   return (
     <div>
-      <div className="flex items-center justify-between mb-0.5">
-        <span className="text-[9px] text-text-muted">{label}</span>
-        <span className="text-[9px] text-violet-400 font-mono">{display(value)}</span>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-xs text-text-muted">{label}</span>
+        <span className="text-xs text-violet-400 font-mono">{display(value)}</span>
       </div>
       <input
         type="range"
