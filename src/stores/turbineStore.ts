@@ -171,6 +171,66 @@ export const DEFAULT_QUANTUM_CONFIG: QuantumConfig = {
   opacity: 0.9,
 }
 
+// ── Environment (Sky & Ground) configuration ────────────────────────────────────
+export type SkyPreset = 'sunny' | 'cloudy' | 'sunset' | 'stormy' | 'night'
+export type GroundTexture = 'grass' | 'sand' | 'dirt' | 'concrete' | 'rock'
+
+export interface EnvironmentConfig {
+  skyPreset: SkyPreset
+  cloudIntensity: number  // 0-1
+  turbidity: number       // 0-10 for Preetham sky
+  groundTexture: GroundTexture
+  groundColor: string     // hex color
+  groundColorVariation: number  // 0-1 for texture variation
+}
+
+export const DEFAULT_ENVIRONMENT_CONFIG: EnvironmentConfig = {
+  skyPreset: 'sunny',
+  cloudIntensity: 0.3,
+  turbidity: 4,
+  groundTexture: 'grass',
+  groundColor: '#3a6b1e',
+  groundColorVariation: 0.4,
+}
+
+// Sky preset configurations
+export const SKY_PRESETS: Record<SkyPreset, { turbidity: number; sunPosition: [number, number, number]; rayleigh: number }> = {
+  sunny: {
+    turbidity: 2,
+    sunPosition: [100, 50, 80],
+    rayleigh: 0.5,
+  },
+  cloudy: {
+    turbidity: 6,
+    sunPosition: [100, 30, 50],
+    rayleigh: 0.8,
+  },
+  sunset: {
+    turbidity: 8,
+    sunPosition: [50, 20, 100],
+    rayleigh: 1.2,
+  },
+  stormy: {
+    turbidity: 10,
+    sunPosition: [100, 15, 50],
+    rayleigh: 1.5,
+  },
+  night: {
+    turbidity: 3,
+    sunPosition: [100, -30, 50],
+    rayleigh: 0.3,
+  },
+}
+
+// Ground texture color presets
+export const GROUND_COLORS: Record<GroundTexture, string[]> = {
+  grass: ['#2d5517', '#3a6b1e', '#4a8024', '#5a9a34', '#6ab844'],
+  sand: ['#c9a367', '#d4b896', '#e0c4a0', '#cdb8a0', '#b8a08c'],
+  dirt: ['#6b5d54', '#8b7355', '#9d7e5d', '#a88f6b', '#8b6f47'],
+  concrete: ['#8a8a8a', '#9a9a9a', '#b0b0b0', '#c0c0c0', '#808080'],
+  rock: ['#6b6b6b', '#7b7b7b', '#8b8b8b', '#9b9b9b', '#a5a5a5'],
+}
+
 // Preset blade curves
 const PRESETS: Record<string, Vec2[]> = {
   'Breeze Petal': [
@@ -335,6 +395,11 @@ interface TurbineState {
   setBambooConfig: (partial: Partial<BambooConfig>) => void
   quantumConfig: QuantumConfig
   setQuantumConfig: (partial: Partial<QuantumConfig>) => void
+
+  // Environment (sky and ground) settings
+  environmentConfig: EnvironmentConfig
+  setEnvironmentConfig: (partial: Partial<EnvironmentConfig>) => void
+
   // Per-preset material attribute overrides (user customizations)
   materialOverrides: Partial<Record<MaterialPreset, Partial<MaterialConfig>>>
   setMaterialOverride: (preset: MaterialPreset, partial: Partial<MaterialConfig>) => void
@@ -625,6 +690,8 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
   setBambooConfig: (partial) => set(s => ({ bambooConfig: { ...s.bambooConfig, ...partial } })),
   quantumConfig: { ...DEFAULT_QUANTUM_CONFIG },
   setQuantumConfig: (partial) => set(s => ({ quantumConfig: { ...s.quantumConfig, ...partial } })),
+  environmentConfig: { ...DEFAULT_ENVIRONMENT_CONFIG },
+  setEnvironmentConfig: (partial) => set(s => ({ environmentConfig: { ...s.environmentConfig, ...partial } })),
   materialOverrides: {},
   setMaterialOverride: (preset, partial) => set(s => ({
     materialOverrides: { ...s.materialOverrides, [preset]: { ...(s.materialOverrides[preset] ?? {}), ...partial } }

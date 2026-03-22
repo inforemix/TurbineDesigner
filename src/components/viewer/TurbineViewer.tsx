@@ -2,10 +2,12 @@ import { useRef, useMemo, useCallback, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, ContactShadows, Float, Sky } from '@react-three/drei'
 import * as THREE from 'three'
-import { useTurbineStore, MATERIAL_PRESETS, type MaterialPreset, DEFAULT_BAMBOO_CONFIG, DEFAULT_QUANTUM_CONFIG } from '../../stores/turbineStore'
+import { useTurbineStore, MATERIAL_PRESETS, type MaterialPreset, DEFAULT_BAMBOO_CONFIG, DEFAULT_QUANTUM_CONFIG, SKY_PRESETS } from '../../stores/turbineStore'
 import { useThemeStore } from '../../stores/themeStore'
 import { catmullRomSplineWithHandles } from '../../utils/spline'
 import { resolveProfileData, halfThickNorm } from '../../utils/airfoil'
+import SceneControls from './SceneControls'
+import { Label } from '../ui/label'
 
 function easeOutCubic(t: number) { return 1 - Math.pow(1 - t, 3) }
 function easeOutBack(t: number) { const c1 = 1.70158; const c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2) }
@@ -902,13 +904,21 @@ function WindParticles() {
 }
 
 function GroundPlane() {
+  const { environmentConfig } = useTurbineStore()
+
   // Simple procedural terrain shader for natural grass variation
-  const grassMaterial = useMemo(() => new THREE.ShaderMaterial({
-    uniforms: {
-      uDarkColor: { value: new THREE.Color('#2d5517') },
-      uLightColor: { value: new THREE.Color('#4a8024') },
-      uBrightColor: { value: new THREE.Color('#5a9a34') },
-    },
+  const grassMaterial = useMemo(() => {
+    const baseColor = new THREE.Color(environmentConfig.groundColor)
+    const darkColor = baseColor.clone().multiplyScalar(0.6)
+    const lightColor = baseColor.clone().multiplyScalar(1.3).clamp(new THREE.Color(0, 0, 0), new THREE.Color(1, 1, 1))
+
+    return new THREE.ShaderMaterial({
+      uniforms: {
+        uDarkColor: { value: darkColor },
+        uLightColor: { value: lightColor },
+        uBrightColor: { value: baseColor },
+        uVariation: { value: environmentConfig.groundColorVariation },
+      },
     vertexShader: `
       varying vec2 vUv;
       void main() {
@@ -920,6 +930,7 @@ function GroundPlane() {
       uniform vec3 uDarkColor;
       uniform vec3 uLightColor;
       uniform vec3 uBrightColor;
+      uniform float uVariation;
       varying vec2 vUv;
 
       // Simple noise function
@@ -938,15 +949,16 @@ function GroundPlane() {
       void main() {
         float dist = length(vUv - 0.5);
         float n = noise(vUv);
-        float pattern = sin(dist * 15.0) * 0.3 + n * 0.2;
+        float pattern = sin(dist * 15.0) * 0.3 + n * uVariation;
         vec3 baseColor = mix(uDarkColor, uLightColor, dist < 0.4 ? 1.0 - dist / 0.4 : 0.0);
         baseColor = mix(baseColor, uBrightColor, dist > 0.4 && dist < 0.5 ? (0.5 - dist) * 10.0 : 0.0);
         baseColor = mix(baseColor, mix(uDarkColor, uLightColor, 0.3), dist >= 0.5 ? 1.0 : 0.0);
         gl_FragColor = vec4(baseColor * (0.85 + pattern * 0.15), 1.0);
       }
     `,
-    side: THREE.DoubleSide,
-  }), [])
+      side: THREE.DoubleSide,
+    })
+  }, [environmentConfig.groundColor, environmentConfig.groundColorVariation])
 
   return (
     <>
@@ -986,6 +998,43 @@ function CanvasRefCapture({ onCanvas }: { onCanvas: (c: HTMLCanvasElement) => vo
   return null
 }
 
+// ── Dynamic Sky component with environment settings ──────────────────────────────
+function SkyComponent() {
+  const { environmentConfig } = useTurbineStore()
+  const { theme } = useThemeStore()
+  const isLight = theme === 'light'
+
+  const skySettings = SKY_PRESETS[environmentConfig.skyPreset]
+  const turbidity = skySettings.turbidity + environmentConfig.cloudIntensity * 3
+
+  return (
+    <>
+      <Sky
+        distance={450}
+        sunPosition={skySettings.sunPosition as [number, number, number]}
+        turbidity={turbidity}
+        rayleigh={skySettings.rayleigh}
+        mieCoefficient={0.004}
+        mieDirectionalG={0.85}
+        inclination={0.49}
+        azimuth={0.25}
+      />
+      {/* Atmospheric haze - adapt to sky preset */}
+      <fog
+        attach="fog"
+        args={[
+          environmentConfig.skyPreset === 'night' ? '#1a1a2e' :
+          environmentConfig.skyPreset === 'sunset' ? '#ff9977' :
+          environmentConfig.skyPreset === 'stormy' ? '#777788' :
+          isLight ? '#dbeafe' : '#c8dff0',
+          environmentConfig.skyPreset === 'night' ? 10 : 18,
+          environmentConfig.skyPreset === 'night' ? 40 : 80
+        ]}
+      />
+    </>
+  )
+}
+
 // ── Smart OrbitControls: pause auto-rotate while dragging ─────────────────────
 function SmartOrbitControls({ isTransitioning }: { isTransitioning: boolean }) {
   const [isDragging, setIsDragging] = useState(false)
@@ -999,7 +1048,7 @@ function SmartOrbitControls({ isTransitioning }: { isTransitioning: boolean }) {
       minDistance={1}
       maxDistance={6}
       target={target}
-      maxPolarAngle={Math.PI / 2 + 0.3}
+      maxPolarAngle={Math.PI / 2}
       autoRotate={!isDragging}
       autoRotateSpeed={0.5}
       enabled={!isTransitioning}
@@ -1028,24 +1077,12 @@ export default function TurbineViewer() {
   return (
     <div className="w-full h-full">
       <Canvas
-        camera={{ position: [1.8, 1.6, 1.8], fov: 45, near: 0.1, far: 200 }}
+        camera={{ position: [1.8, 1.6, 1.8], fov: 45, near: 0.01, far: 500 }}
         gl={glConfig}
         shadows="soft"
       >
         {/* Sky dome — Preetham atmospheric model */}
-        <Sky
-          distance={450}
-          sunPosition={[100, 30, 50]}
-          turbidity={isLight ? 4 : 6}
-          rayleigh={isLight ? 0.5 : 0.8}
-          mieCoefficient={0.004}
-          mieDirectionalG={0.85}
-          inclination={0.49}
-          azimuth={0.25}
-        />
-
-        {/* Atmospheric haze toward horizon */}
-        <fog attach="fog" args={[isLight ? '#dbeafe' : '#c8dff0', isLight ? 22 : 18, 80]} />
+        <SkyComponent />
 
         <SceneCapture />
         <CanvasRefCapture onCanvas={handleCanvas} />
@@ -1083,6 +1120,14 @@ export default function TurbineViewer() {
 
         <SmartOrbitControls isTransitioning={isTransitioning} />
       </Canvas>
+
+      {/* Scene Controls Overlay */}
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+        <div className="bg-card/95 backdrop-blur-md rounded-xl border border-border p-4 w-72 shadow-xl pointer-events-auto">
+          <Label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block mb-3">Scene Settings</Label>
+          <SceneControls />
+        </div>
+      </div>
     </div>
   )
 }
