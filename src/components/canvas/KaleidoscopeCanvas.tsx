@@ -4,6 +4,7 @@ import { catmullRomSplineWithHandles, crAutoTangent, mirrorPoints } from '../../
 import { Bezier } from 'bezier-js'
 import { getCanvasTheme, type CanvasTheme } from '../../utils/canvasTheme'
 import { useThemeStore } from '../../stores/themeStore'
+import { Undo2, Redo2, Grid3X3, X, Spline, Dices, Shapes, Box } from 'lucide-react'
 
 /* ------------------------------------------------------------------ */
 /*  Snowflake tree-branch renderer                                     */
@@ -1339,59 +1340,60 @@ export default function KaleidoscopeCanvas() {
       />
 
       {/* Canvas toolbar — bottom left */}
-      <div className="absolute bottom-10 left-3 flex items-center gap-1.5 pointer-events-auto z-10">
+      <div className="absolute bottom-10 left-3 flex flex-wrap items-center gap-1.5 pointer-events-auto z-10 max-w-[calc(100vw-6rem)]">
+        {/* Icon button base: min 40×40px touch target, icon 24×24 */}
         <button
           onClick={undo}
           disabled={!canUndo}
           title="Undo (Ctrl+Z)"
-          className="w-7 h-7 rounded-lg flex items-center justify-center text-xs transition-all border border-border/40 bg-surface/80 backdrop-blur-sm disabled:opacity-30 hover:border-teal/40 hover:text-teal text-text-dim"
+          className="w-10 h-10 rounded-lg flex items-center justify-center transition-all border border-border/40 bg-surface/80 backdrop-blur-sm disabled:opacity-30 hover:border-teal/40 hover:text-teal text-text-dim"
         >
-          ⟲
+          <Undo2 size={24} />
         </button>
         <button
           onClick={redo}
           disabled={!canRedo}
           title="Redo (Ctrl+Y)"
-          className="w-7 h-7 rounded-lg flex items-center justify-center text-xs transition-all border border-border/40 bg-surface/80 backdrop-blur-sm disabled:opacity-30 hover:border-teal/40 hover:text-teal text-text-dim"
+          className="w-10 h-10 rounded-lg flex items-center justify-center transition-all border border-border/40 bg-surface/80 backdrop-blur-sm disabled:opacity-30 hover:border-teal/40 hover:text-teal text-text-dim"
         >
-          ⟳
+          <Redo2 size={24} />
         </button>
         <button
           onClick={() => setSnapToGrid(!snapToGrid)}
           title="Snap to grid"
-          className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs transition-all border bg-surface/80 backdrop-blur-sm ${
+          className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all border bg-surface/80 backdrop-blur-sm ${
             snapToGrid ? 'border-teal/50 text-teal' : 'border-border/40 text-text-dim hover:border-teal/30'
           }`}
         >
-          ⊞
+          <Grid3X3 size={24} />
         </button>
         <button
           onClick={() => {
             if (bladePoints.length > 0) clearBlade()
           }}
           title="Clear all points"
-          className="w-7 h-7 rounded-lg flex items-center justify-center text-xs transition-all border border-border/40 bg-surface/80 backdrop-blur-sm hover:border-red-500/40 hover:text-red-400 text-text-dim"
+          className="w-10 h-10 rounded-lg flex items-center justify-center transition-all border border-border/40 bg-surface/80 backdrop-blur-sm hover:border-red-500/40 hover:text-red-400 text-text-dim"
         >
-          ✕
+          <X size={24} />
         </button>
         <button
           onClick={resetAllHandles}
           title="Reset all bezier handles to auto"
-          className="w-7 h-7 rounded-lg flex items-center justify-center text-xs transition-all border border-border/40 bg-surface/80 backdrop-blur-sm hover:border-violet-400/40 hover:text-violet-400 text-text-dim"
+          className="w-10 h-10 rounded-lg flex items-center justify-center transition-all border border-border/40 bg-surface/80 backdrop-blur-sm hover:border-violet-400/40 hover:text-violet-400 text-text-dim"
         >
-          ⟡
+          <Spline size={24} />
         </button>
 
         {/* Divider */}
-        <div className="w-px h-5 bg-border/30 mx-0.5" />
+        <div className="w-px h-6 bg-border/30 mx-0.5 self-center" />
 
         {/* Dice — random shape */}
         <button
           onClick={handleDice}
           title="Random shape (cycles through 6 generators)"
-          className="w-7 h-7 rounded-lg flex items-center justify-center text-xs transition-all border border-border/40 bg-surface/80 backdrop-blur-sm hover:border-amber-400/50 hover:text-amber-400 text-text-dim"
+          className="w-10 h-10 rounded-lg flex items-center justify-center transition-all border border-border/40 bg-surface/80 backdrop-blur-sm hover:border-amber-400/50 hover:text-amber-400 text-text-dim"
         >
-          ⚄
+          <Dices size={24} />
         </button>
 
         {/* Shape presets palette */}
@@ -1399,37 +1401,39 @@ export default function KaleidoscopeCanvas() {
           <button
             onClick={() => setShowShapes(v => !v)}
             title="Shape presets"
-            className={`px-2 h-7 rounded-lg flex items-center gap-1 text-[10px] font-medium transition-all border backdrop-blur-sm ${
+            className={`px-3 h-10 rounded-lg flex items-center gap-2 text-sm font-medium transition-all border backdrop-blur-sm ${
               showShapes
                 ? 'border-violet-400/50 text-violet-400 bg-violet-400/10'
                 : 'border-border/40 text-text-dim bg-surface/80 hover:border-violet-400/30 hover:text-violet-400'
             }`}
           >
-            ◈ Shapes
+            <Shapes size={24} />
+            <span className="hidden sm:inline">Shapes</span>
           </button>
 
           {showShapes && (
-            <div className="absolute bottom-9 left-0 bg-[#0d1220]/95 backdrop-blur-md border border-border/40 rounded-xl p-2 shadow-2xl flex flex-col gap-1 min-w-[120px]">
-              <div className="text-[8px] uppercase tracking-widest text-text-muted px-1 pb-1">Presets</div>
+            <div className="absolute bottom-12 left-0 bg-[#0d1220]/95 backdrop-blur-md border border-border/40 rounded-xl p-3 shadow-2xl flex flex-col gap-1 min-w-[160px]">
+              <div className="text-xs uppercase tracking-widest text-text-muted px-1 pb-1.5">Presets</div>
               {Object.entries(SHAPE_PRESETS).map(([name, pts]) => (
                 <button
                   key={name}
                   onClick={() => handlePreset(pts)}
-                  className="text-left px-2 py-1 rounded-lg text-[10px] text-text-dim hover:text-teal hover:bg-teal/10 transition-colors flex items-center gap-2"
+                  className="text-left px-3 py-2 rounded-lg text-sm text-text-dim hover:text-teal hover:bg-teal/10 transition-colors flex items-center gap-2"
                 >
                   <ShapeThumb pts={pts} />
                   {name}
                 </button>
               ))}
-              <div className="border-t border-border/20 my-1" />
-              <div className="text-[8px] uppercase tracking-widest text-text-muted px-1 pb-0.5">Random styles</div>
+              <div className="border-t border-border/20 my-1.5" />
+              <div className="text-xs uppercase tracking-widest text-text-muted px-1 pb-1">Random styles</div>
               {RANDOM_STYLES.map((style) => (
                 <button
                   key={style}
                   onClick={() => { pushUndo(); setBladePoints(generateShape(style)); setShowShapes(false) }}
-                  className="text-left px-2 py-1 rounded-lg text-[10px] text-text-dim hover:text-amber-400 hover:bg-amber-400/10 transition-colors capitalize"
+                  className="text-left px-3 py-2 rounded-lg text-sm text-text-dim hover:text-amber-400 hover:bg-amber-400/10 transition-colors capitalize flex items-center gap-2"
                 >
-                  ⚄ {style}
+                  <Dices size={16} />
+                  {style}
                 </button>
               ))}
             </div>
@@ -1438,10 +1442,10 @@ export default function KaleidoscopeCanvas() {
 
         {/* Point counter */}
         <span
-          className="text-[9px] px-1.5 py-0.5 rounded bg-surface/80 border border-border/40 text-text-muted backdrop-blur-sm"
+          className="text-sm px-2.5 py-1.5 rounded-lg bg-surface/80 border border-border/40 text-text-muted backdrop-blur-sm font-mono"
           style={{ color: bladePoints.length >= MAX_POINTS ? '#fbbf24' : undefined }}
         >
-          {bladePoints.length}/{MAX_POINTS} pts
+          {bladePoints.length}/{MAX_POINTS}
         </span>
       </div>
 
@@ -1450,11 +1454,12 @@ export default function KaleidoscopeCanvas() {
         <button
           onClick={() => setShowMiniPreview(v => !v)}
           title="Toggle 3D preview"
-          className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all border backdrop-blur-sm ${
+          className={`px-3 h-10 rounded-lg flex items-center gap-2 text-sm font-medium transition-all border backdrop-blur-sm ${
             showMiniPreview ? 'border-teal/50 text-teal bg-teal/10' : 'border-border/40 text-text-dim bg-surface/80 hover:border-teal/30'
           }`}
         >
-          ◇ 3D Preview
+          <Box size={24} />
+          <span className="hidden sm:inline">3D Preview</span>
         </button>
         {showMiniPreview && (
           <div className="shadow-2xl">
