@@ -7,7 +7,7 @@ export default function PresetBrowser() {
 
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+      <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
         Presets
       </span>
 
@@ -15,10 +15,10 @@ export default function PresetBrowser() {
         {/* Dropdown toggle button */}
         <button
           onClick={() => setOpen(!open)}
-          className="w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold transition-all border bg-secondary/50 text-muted-foreground border-border hover:border-teal/30 hover:text-teal hover:bg-secondary flex items-center justify-between"
+          className="w-full text-left h-10 px-3 rounded-lg text-sm font-semibold transition-all border bg-secondary/50 text-muted-foreground border-border hover:border-teal/30 hover:text-teal hover:bg-secondary flex items-center justify-between"
         >
           <span className="truncate">{activePreset || 'Select preset...'}</span>
-          <span className="text-[10px] ml-2 shrink-0">{open ? '▼' : '▶'}</span>
+          <span className="text-xs ml-2 shrink-0">{open ? '▼' : '▶'}</span>
         </button>
 
         {/* Dropdown menu */}
@@ -32,7 +32,7 @@ export default function PresetBrowser() {
                     loadPreset(name)
                     setOpen(false)
                   }}
-                  className={`text-left px-3 py-2 text-xs font-semibold transition-colors border-b border-border/50 last:border-b-0 ${
+                  className={`text-left h-10 px-3 text-sm font-semibold transition-colors border-b border-border/50 last:border-b-0 flex items-center ${
                     activePreset === name
                       ? 'bg-teal/20 text-teal'
                       : 'bg-card text-muted-foreground hover:bg-secondary hover:text-foreground'
@@ -48,7 +48,7 @@ export default function PresetBrowser() {
 
       <button
         onClick={clearBlade}
-        className="px-3 py-2.5 rounded-lg text-xs font-semibold text-destructive/70 border border-destructive/20 hover:border-destructive/40 hover:text-destructive transition-all bg-destructive/5"
+        className="h-10 px-3 rounded-lg text-sm font-semibold text-destructive/70 border border-destructive/20 hover:border-destructive/40 hover:text-destructive transition-all bg-destructive/5 flex items-center justify-center"
       >
         ✕ Clear Canvas
       </button>

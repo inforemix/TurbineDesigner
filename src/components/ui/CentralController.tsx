@@ -123,7 +123,7 @@ function Knob({ label, value, min, max, step, unit = '', color = '#2dd4bf', form
           style={{ pointerEvents: 'none' }}
         >
           <span
-            className="text-[10px] font-mono font-bold leading-none"
+            className="text-xs font-mono font-bold leading-none"
             style={{ color, textShadow: focused ? `0 0 8px ${color}` : 'none' }}
           >
             {displayVal}
@@ -133,7 +133,7 @@ function Knob({ label, value, min, max, step, unit = '', color = '#2dd4bf', form
 
       {/* Label */}
       <span
-        className="text-[8px] uppercase tracking-widest font-medium transition-colors"
+        className="text-xs uppercase tracking-widest font-medium transition-colors"
         style={{ color: labelColor }}
         onMouseEnter={e => (e.currentTarget.style.color = labelHoverColor)}
         onMouseLeave={e => (e.currentTarget.style.color = labelColor)}
@@ -163,7 +163,7 @@ function BladeCountSelector({ isLight }: { isLight: boolean }) {
           <button
             key={n}
             onClick={() => setBladeCount(n)}
-            className="w-6 h-6 rounded-md text-[10px] font-bold transition-all border"
+            className="w-6 h-6 rounded-md text-xs font-bold transition-all border"
             style={bladeCount === n
               ? { background: tealBg, color: teal, borderColor: tealBorder, boxShadow: tealShadow }
               : { background: 'transparent', color: inactiveColor, borderColor: inactiveBorder }
@@ -173,7 +173,7 @@ function BladeCountSelector({ isLight }: { isLight: boolean }) {
           </button>
         ))}
       </div>
-      <span className="text-[8px] uppercase tracking-widest font-medium" style={{ color: labelColor }}>Blades</span>
+      <span className="text-xs uppercase tracking-widest font-medium" style={{ color: labelColor }}>Blades</span>
     </div>
   )
 }
@@ -203,7 +203,7 @@ function SymmSelector({ isLight }: { isLight: boolean }) {
             key={m}
             onClick={() => setSymmetryMode(m)}
             title={m}
-            className="w-6 h-6 rounded-md text-[11px] transition-all border"
+            className="w-6 h-6 rounded-md text-xs transition-all border"
             style={symmetryMode === m
               ? { background: violetBg, color: violet, borderColor: violetBorder, boxShadow: violetShadow }
               : { background: 'transparent', color: inactiveColor, borderColor: inactiveBorder }
@@ -213,7 +213,7 @@ function SymmSelector({ isLight }: { isLight: boolean }) {
           </button>
         ))}
       </div>
-      <span className="text-[8px] uppercase tracking-widest font-medium" style={{ color: labelColor }}>Symm</span>
+      <span className="text-xs uppercase tracking-widest font-medium" style={{ color: labelColor }}>Symm</span>
     </div>
   )
 }
@@ -261,7 +261,7 @@ export default function CentralController() {
       {/* Toggle pill */}
       <button
         onClick={() => setCollapsed(v => !v)}
-        className="px-3 py-0.5 rounded-full text-[8px] uppercase tracking-widest font-semibold transition-all"
+        className="h-8 px-4 rounded-full text-xs uppercase tracking-widest font-semibold transition-all flex items-center"
         style={{ background: pillBg, color: pillColor, border: pillBorder }}
       >
         {collapsed ? '▴ controls' : '▾ controls'}
