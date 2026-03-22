@@ -68,10 +68,24 @@ const MATERIAL_KEYS = Object.keys(MATERIAL_PRESETS) as MaterialPreset[]
 async function handleExportGLB() {
   const { generateTurbineMesh, exportToGLB } = await import('../../utils/meshGenerator')
   const store = useTurbineStore.getState()
-  const group = generateTurbineMesh(
-    store.bladePoints, store.bladeCount, store.height, store.twist,
-    store.taper, store.thickness, store.chordCurve, store.twistCurve,
-  )
+  const group = generateTurbineMesh({
+    bladePoints: store.bladePoints,
+    bladeHandles: store.bladeHandles,
+    bladeCount: store.bladeCount,
+    height: store.height,
+    twist: store.twist,
+    taper: store.taper,
+    thickness: store.thickness,
+    symmetryMode: store.symmetryMode,
+    curveSmoothing: store.curveSmoothing,
+    bladeSections: store.bladeSections,
+    airfoilPreset: store.airfoilPreset,
+    customNacaM: store.customNacaM,
+    customNacaP: store.customNacaP,
+    customNacaT: store.customNacaT,
+    materialPreset: store.materialPreset,
+    materialOverrides: store.materialOverrides,
+  })
   const blob = await exportToGLB(group)
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
