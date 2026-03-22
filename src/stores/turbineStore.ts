@@ -12,7 +12,7 @@ export type SymmetryMode = 'pinwheel' | 'snowflake' | 'helix' | 'freeform'
 export type AppMode = 'draw' | 'side' | 'view'
 export type BloomTier = 'dormant' | 'seedling' | 'flourishing' | 'radiant'
 
-export type MaterialPreset = 'teal-metal' | 'brushed-steel' | 'bamboo-shader' | 'copper-patina' | 'frosted-glass' | 'matte-white' | 'neon-shader'
+export type MaterialPreset = 'teal-metal' | 'brushed-steel' | 'bamboo-shader' | 'copper-patina' | 'frosted-glass' | 'matte-white' | 'neon-shader' | 'quantum-shader'
 
 export interface MaterialConfig {
   label: string
@@ -93,6 +93,7 @@ export const MATERIAL_PRESETS: Record<MaterialPreset, MaterialConfig> = {
   'frosted-glass': { label: 'Frosted Glass', color: '#c8e6f0', metalness: 0.1,  roughness: 0.15, opacity: 0.7, transparent: true,  emissiveIntensity: 0.1 },
   'matte-white':   { label: 'Matte White',   color: '#f0f0f0', metalness: 0.05, roughness: 0.9,  opacity: 1,   transparent: false, emissiveIntensity: 0 },
   'neon-shader':   { label: 'Neon Shader',   color: '#2dd4bf', metalness: 0,    roughness: 0,    opacity: 1,   transparent: false, emissiveIntensity: 0 },
+  'quantum-shader': { label: 'Quantum',      color: '#06b6d4', metalness: 0,    roughness: 0,    opacity: 1,   transparent: false, emissiveIntensity: 0 },
 }
 
 // ── Neon Shader configuration ──────────────────────────────────────────────────
@@ -141,6 +142,33 @@ export const DEFAULT_BAMBOO_CONFIG: BambooConfig = {
   pattern: 0,
   shininess: 0.4,
   opacity: 1.0,
+}
+
+// ── Quantum Shader configuration ───────────────────────────────────────────────
+export type QuantumFlowType = 0 | 1 | 2 | 3  // radial | spiral | turbulence | vortex
+
+export interface QuantumConfig {
+  colorA: string        // primary quantum color
+  colorB: string        // secondary quantum color
+  colorC: string        // accent/glow color
+  flowType: QuantumFlowType  // flow field distortion type
+  flowSpeed: number     // animation speed
+  flowIntensity: number // distortion strength
+  pulseSpeed: number    // color shift speed
+  noiseScale: number    // flow field granularity
+  opacity: number       // overall opacity
+}
+
+export const DEFAULT_QUANTUM_CONFIG: QuantumConfig = {
+  colorA: '#06b6d4',
+  colorB: '#0891b2',
+  colorC: '#06d6a0',
+  flowType: 0,
+  flowSpeed: 2.0,
+  flowIntensity: 0.8,
+  pulseSpeed: 3.0,
+  noiseScale: 2.5,
+  opacity: 0.9,
 }
 
 // Preset blade curves
@@ -305,6 +333,8 @@ interface TurbineState {
   setNeonConfig: (partial: Partial<NeonConfig>) => void
   bambooConfig: BambooConfig
   setBambooConfig: (partial: Partial<BambooConfig>) => void
+  quantumConfig: QuantumConfig
+  setQuantumConfig: (partial: Partial<QuantumConfig>) => void
   // Per-preset material attribute overrides (user customizations)
   materialOverrides: Partial<Record<MaterialPreset, Partial<MaterialConfig>>>
   setMaterialOverride: (preset: MaterialPreset, partial: Partial<MaterialConfig>) => void
@@ -593,6 +623,8 @@ export const useTurbineStore = create<TurbineState>((set, get) => ({
   setNeonConfig: (partial) => set(s => ({ neonConfig: { ...s.neonConfig, ...partial } })),
   bambooConfig: { ...DEFAULT_BAMBOO_CONFIG },
   setBambooConfig: (partial) => set(s => ({ bambooConfig: { ...s.bambooConfig, ...partial } })),
+  quantumConfig: { ...DEFAULT_QUANTUM_CONFIG },
+  setQuantumConfig: (partial) => set(s => ({ quantumConfig: { ...s.quantumConfig, ...partial } })),
   materialOverrides: {},
   setMaterialOverride: (preset, partial) => set(s => ({
     materialOverrides: { ...s.materialOverrides, [preset]: { ...(s.materialOverrides[preset] ?? {}), ...partial } }

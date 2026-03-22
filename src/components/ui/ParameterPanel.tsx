@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useTurbineStore, type BloomTier, type SymmetryMode, type MaterialPreset, MATERIAL_PRESETS, type NeonPattern, type BambooPattern, type MaterialConfig } from '../../stores/turbineStore'
+import { useTurbineStore, type BloomTier, type SymmetryMode, type MaterialPreset, MATERIAL_PRESETS, type NeonPattern, type BambooPattern, type QuantumFlowType, type MaterialConfig } from '../../stores/turbineStore'
 import DistributionEditor from './DistributionEditor'
 import { Slider } from './slider'
 import { Button } from './button'
@@ -110,6 +110,7 @@ export default function ParameterPanel() {
     materialOverrides, setMaterialOverride, resetMaterialOverride,
     neonConfig, setNeonConfig,
     bambooConfig, setBambooConfig,
+    quantumConfig, setQuantumConfig,
     curveSmoothing, setCurveSmoothing,
     mode,
     chordCurve, setChordCurve,
@@ -296,39 +297,118 @@ export default function ParameterPanel() {
           <Separator className="bg-border/20 my-3" />
           <div className="pt-2 flex flex-col gap-3">
             <Label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Material</Label>
-            <div className="grid grid-cols-2 gap-2">
-              {MATERIAL_KEYS.map((key) => {
-                const mat = MATERIAL_PRESETS[key]
-                const isNeon = key === 'neon-shader'
-                const ov = materialOverrides[key] ?? {}
-                const swatchColor = ov.color ?? mat.color
-                const isBamboo = key === 'bamboo-shader'
-                return (
+
+            {/* Grouped metals dropdown + other materials */}
+            <div className="flex flex-col gap-2">
+              {/* Metals dropdown and shader buttons */}
+              <div className="grid grid-cols-2 gap-2">
+                {/* Metals Dropdown */}
+                <div className="relative group">
                   <button
-                    key={key}
-                    onClick={() => setMaterialPreset(key)}
-                    className={`py-2 px-2.5 rounded-lg text-[10px] font-semibold transition-all flex items-center gap-2 border ${
-                      materialPreset === key
-                        ? isNeon ? 'bg-violet-500/20 text-violet-300 border-violet-400/50 shadow-sm'
-                          : isBamboo ? 'bg-green-700/20 text-green-300 border-green-600/50 shadow-sm'
-                          : 'bg-teal/30 text-teal border-teal/40 shadow-sm'
+                    className={`w-full py-2 px-2.5 rounded-lg text-[10px] font-semibold transition-all flex items-center gap-2 border ${
+                      ['teal-metal', 'brushed-steel', 'matte-white'].includes(materialPreset)
+                        ? 'bg-teal/30 text-teal border-teal/40 shadow-sm'
                         : 'bg-secondary/50 text-muted-foreground hover:bg-secondary hover:border-teal/30'
                     }`}
                   >
-                    {isNeon ? (
-                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-white/10"
-                        style={{ background: `linear-gradient(135deg, ${neonConfig.colorA}, ${neonConfig.rimColor})` }} />
-                    ) : isBamboo ? (
-                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-white/10"
-                        style={{ background: `linear-gradient(135deg, ${bambooConfig.colorLight}, ${bambooConfig.colorDark})` }} />
-                    ) : (
+                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-white/10"
+                      style={{ background: materialOverrides[materialPreset]?.color ?? MATERIAL_PRESETS[materialPreset]?.color ?? '#2dd4bf' }} />
+                    Metals ▼
+                  </button>
+                  {/* Dropdown menu */}
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-xl p-2 z-50 hidden group-hover:block">
+                    {['teal-metal', 'brushed-steel', 'matte-white'].map((key) => {
+                      const mat = MATERIAL_PRESETS[key as MaterialPreset]
+                      const ov = materialOverrides[key as MaterialPreset] ?? {}
+                      const swatchColor = ov.color ?? mat.color
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => setMaterialPreset(key as MaterialPreset)}
+                          className={`w-full text-left py-1.5 px-2 rounded text-[10px] font-semibold transition-all flex items-center gap-2 ${
+                            materialPreset === key
+                              ? 'bg-teal/30 text-teal'
+                              : 'hover:bg-secondary text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          <span className="w-2 h-2 rounded-full flex-shrink-0 border border-white/10"
+                            style={{ background: swatchColor }} />
+                          {mat.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Neon Shader */}
+                <button
+                  onClick={() => setMaterialPreset('neon-shader')}
+                  className={`py-2 px-2.5 rounded-lg text-[10px] font-semibold transition-all flex items-center gap-2 border ${
+                    materialPreset === 'neon-shader'
+                      ? 'bg-violet-500/20 text-violet-300 border-violet-400/50 shadow-sm'
+                      : 'bg-secondary/50 text-muted-foreground hover:bg-secondary hover:border-teal/30'
+                  }`}
+                >
+                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-white/10"
+                    style={{ background: `linear-gradient(135deg, ${neonConfig.colorA}, ${neonConfig.rimColor})` }} />
+                  Neon
+                </button>
+              </div>
+
+              {/* Second row: Bamboo, Quantum, and other materials */}
+              <div className="grid grid-cols-2 gap-2">
+                {/* Bamboo Shader */}
+                <button
+                  onClick={() => setMaterialPreset('bamboo-shader')}
+                  className={`py-2 px-2.5 rounded-lg text-[10px] font-semibold transition-all flex items-center gap-2 border ${
+                    materialPreset === 'bamboo-shader'
+                      ? 'bg-green-700/20 text-green-300 border-green-600/50 shadow-sm'
+                      : 'bg-secondary/50 text-muted-foreground hover:bg-secondary hover:border-teal/30'
+                  }`}
+                >
+                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-white/10"
+                    style={{ background: `linear-gradient(135deg, ${bambooConfig.colorLight}, ${bambooConfig.colorDark})` }} />
+                  Bamboo
+                </button>
+
+                {/* Quantum Shader */}
+                <button
+                  onClick={() => setMaterialPreset('quantum-shader')}
+                  className={`py-2 px-2.5 rounded-lg text-[10px] font-semibold transition-all flex items-center gap-2 border ${
+                    materialPreset === 'quantum-shader'
+                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/50 shadow-sm'
+                      : 'bg-secondary/50 text-muted-foreground hover:bg-secondary hover:border-teal/30'
+                  }`}
+                >
+                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-white/10"
+                    style={{ background: `linear-gradient(135deg, ${quantumConfig.colorA}, ${quantumConfig.colorC})` }} />
+                  Quantum
+                </button>
+              </div>
+
+              {/* Third row: Other materials */}
+              <div className="grid grid-cols-2 gap-2">
+                {['copper-patina', 'frosted-glass'].map((key) => {
+                  const mat = MATERIAL_PRESETS[key as MaterialPreset]
+                  const ov = materialOverrides[key as MaterialPreset] ?? {}
+                  const swatchColor = ov.color ?? mat.color
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => setMaterialPreset(key as MaterialPreset)}
+                      className={`py-2 px-2.5 rounded-lg text-[10px] font-semibold transition-all flex items-center gap-2 border ${
+                        materialPreset === key
+                          ? 'bg-teal/30 text-teal border-teal/40 shadow-sm'
+                          : 'bg-secondary/50 text-muted-foreground hover:bg-secondary hover:border-teal/30'
+                      }`}
+                    >
                       <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-white/10"
                         style={{ background: swatchColor }} />
-                    )}
-                    {mat.label}
-                  </button>
-                )
-              })}
+                      {mat.label}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
 
             {/* ── Material config panel — shown for the active preset ── */}
@@ -474,6 +554,53 @@ export default function ParameterPanel() {
                 <ParamSlider label="Grain"        value={bambooConfig.grainStrength} min={0} max={1}   step={0.01} onChange={v => setBambooConfig({ grainStrength: v })} />
                 <ParamSlider label="Shininess"    value={bambooConfig.shininess}     min={0} max={1}   step={0.01} onChange={v => setBambooConfig({ shininess: v })} />
                 <ParamSlider label="Opacity"      value={bambooConfig.opacity}       min={0.1} max={1} step={0.01} onChange={v => setBambooConfig({ opacity: v })} />
+              </div>
+            )}
+
+            {/* Quantum Shader config */}
+            {materialPreset === 'quantum-shader' && (
+              <div className="flex flex-col gap-3 p-3 rounded-xl border border-cyan-400/20 bg-cyan-500/5">
+                <div className="text-[9px] uppercase tracking-widest text-cyan-400 font-semibold">Quantum Config</div>
+
+                <div className="flex gap-2">
+                  {([
+                    { key: 'colorA', label: 'Primary' },
+                    { key: 'colorB', label: 'Secondary' },
+                    { key: 'colorC', label: 'Accent' },
+                  ] as { key: 'colorA' | 'colorB' | 'colorC'; label: string }[]).map(({ key, label }) => (
+                    <label key={key} className="flex flex-col items-center gap-1 cursor-pointer flex-1">
+                      <div className="relative w-full h-7 rounded-lg overflow-hidden border border-white/10"
+                        style={{ background: quantumConfig[key] }}>
+                        <input type="color" value={quantumConfig[key]}
+                          onChange={e => setQuantumConfig({ [key]: e.target.value })}
+                          className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+                      </div>
+                      <span className="text-[8px] text-text-muted">{label}</span>
+                    </label>
+                  ))}
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[9px] text-text-muted uppercase tracking-wider">Flow Type</span>
+                  <div className="grid grid-cols-4 gap-1">
+                    {(['Radial', 'Spiral', 'Turbulence', 'Vortex'] as const).map((name, idx) => (
+                      <button key={idx} onClick={() => setQuantumConfig({ flowType: idx as QuantumFlowType })}
+                        className={`py-1 rounded-md text-[8px] font-medium transition-all border ${
+                          quantumConfig.flowType === idx
+                            ? 'border-cyan-400/60 bg-cyan-500/25 text-cyan-300'
+                            : 'border-border/30 bg-surface/50 text-text-muted hover:border-cyan-400/30 hover:text-cyan-400'
+                        }`}>
+                        {name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <ParamSlider label="Flow Speed"     value={quantumConfig.flowSpeed}      min={0.1} max={5}   step={0.1}  onChange={v => setQuantumConfig({ flowSpeed: v })} />
+                <ParamSlider label="Flow Intensity" value={quantumConfig.flowIntensity}  min={0}   max={2}   step={0.01} onChange={v => setQuantumConfig({ flowIntensity: v })} />
+                <ParamSlider label="Pulse Speed"    value={quantumConfig.pulseSpeed}     min={0.1} max={8}   step={0.1}  onChange={v => setQuantumConfig({ pulseSpeed: v })} />
+                <ParamSlider label="Noise Scale"    value={quantumConfig.noiseScale}     min={0.5} max={5}   step={0.1}  onChange={v => setQuantumConfig({ noiseScale: v })} />
+                <ParamSlider label="Opacity"        value={quantumConfig.opacity}        min={0.1} max={1}   step={0.01} onChange={v => setQuantumConfig({ opacity: v })} />
               </div>
             )}
           </div>
