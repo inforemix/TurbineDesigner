@@ -2,10 +2,12 @@ import { useRef, useMemo, useCallback, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, ContactShadows, Float, Sky } from '@react-three/drei'
 import * as THREE from 'three'
-import { useTurbineStore, MATERIAL_PRESETS, type MaterialPreset, DEFAULT_BAMBOO_CONFIG } from '../../stores/turbineStore'
+import { useTurbineStore, MATERIAL_PRESETS, type MaterialPreset, DEFAULT_BAMBOO_CONFIG, DEFAULT_QUANTUM_CONFIG, SKY_PRESETS } from '../../stores/turbineStore'
 import { useThemeStore } from '../../stores/themeStore'
 import { catmullRomSplineWithHandles } from '../../utils/spline'
 import { resolveProfileData, halfThickNorm } from '../../utils/airfoil'
+import SceneControls from './SceneControls'
+import PhysicsDashboardCompact from '../ui/PhysicsDashboardCompact'
 
 function easeOutCubic(t: number) { return 1 - Math.pow(1 - t, 3) }
 function easeOutBack(t: number) { const c1 = 1.70158; const c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2) }
@@ -238,6 +240,143 @@ const BAMBOO_FRAG = /* glsl */`
   }
 `
 
+// ── GLSL Quantum Shader with Flow Field Distortion ──────────────────────────────
+const QUANTUM_VERT = /* glsl */`
+  varying vec3 vWorldNormal;
+  varying vec3 vWorldPosition;
+  varying float vHeight;
+  varying vec3 vWorldPos;
+
+  void main() {
+    vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
+    vec4 worldPos = modelMatrix * vec4(position, 1.0);
+    vWorldPosition = worldPos.xyz;
+    vWorldPos = worldPos.xyz;
+    vHeight = position.y;
+    gl_Position = projectionMatrix * viewMatrix * worldPos;
+  }
+`
+
+const QUANTUM_FRAG = /* glsl */`
+  uniform vec3  uColorA;
+  uniform vec3  uColorB;
+  uniform vec3  uColorC;
+  uniform float uTime;
+  uniform float uFlowSpeed;
+  uniform float uFlowIntensity;
+  uniform float uPulseSpeed;
+  uniform float uNoiseScale;
+  uniform int   uFlowType;
+  uniform float uOpacity;
+
+  varying vec3 vWorldNormal;
+  varying vec3 vWorldPosition;
+  varying float vHeight;
+  varying vec3 vWorldPos;
+
+  // Improved noise functions
+  float hash(float n) { return fract(sin(n) * 43758.5453); }
+  float hash2(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+
+  float noise(float x) {
+    float i = floor(x);
+    float f = fract(x);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(hash(i), hash(i + 1.0), f);
+  }
+
+  float noise2D(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    float n00 = hash2(i);
+    float n10 = hash2(i + vec2(1.0, 0.0));
+    float n01 = hash2(i + vec2(0.0, 1.0));
+    float n11 = hash2(i + vec2(1.0, 1.0));
+    float nx0 = mix(n00, n10, f.x);
+    float nx1 = mix(n01, n11, f.x);
+    return mix(nx0, nx1, f.y);
+  }
+
+  vec2 getFlowField(vec3 pos, float t) {
+    vec2 flow = vec2(0.0);
+
+    if (uFlowType == 0) {
+      // Radial flow from center
+      vec2 toCenter = vec2(pos.x, pos.z);
+      float dist = length(toCenter);
+      flow = normalize(toCenter) * sin(dist * uNoiseScale - t * uFlowSpeed);
+
+    } else if (uFlowType == 1) {
+      // Spiral flow
+      float angle = atan(pos.z, pos.x);
+      float r = length(vec2(pos.x, pos.z));
+      flow = vec2(
+        cos(angle + r * uNoiseScale - t * uFlowSpeed) - cos(angle),
+        sin(angle + r * uNoiseScale - t * uFlowSpeed) - sin(angle)
+      );
+
+    } else if (uFlowType == 2) {
+      // Turbulence flow
+      flow = vec2(
+        sin(pos.x * uNoiseScale + t * uFlowSpeed) * cos(pos.z * uNoiseScale),
+        cos(pos.x * uNoiseScale) * sin(pos.z * uNoiseScale + t * uFlowSpeed)
+      );
+
+    } else {
+      // Vortex flow
+      vec2 p = vec2(pos.x, pos.z);
+      vec2 perp = vec2(-p.y, p.x);
+      flow = normalize(perp) * (1.0 - exp(-length(p) * uNoiseScale)) * sin(length(p) - t * uFlowSpeed);
+    }
+
+    return flow * uFlowIntensity;
+  }
+
+  void main() {
+    vec3 viewDir = normalize(cameraPosition - vWorldPosition);
+    vec3 norm = normalize(vWorldNormal);
+
+    // Base diffuse
+    float diffuse = abs(dot(norm, normalize(vec3(1.0, 1.5, 0.8)))) * 0.5 + 0.5;
+
+    // Fresnel glow
+    float fresnel = 1.0 - abs(dot(norm, viewDir));
+    fresnel = pow(fresnel, 2.5);
+
+    // Get flow field distortion
+    vec2 flow = getFlowField(vWorldPos, uTime);
+
+    // Position-based quantum color
+    float posHash = noise2D(vec2(vWorldPos.x * uNoiseScale, vWorldPos.z * uNoiseScale));
+    float heightPulse = sin(vHeight * uNoiseScale * 2.0 + uTime * uPulseSpeed) * 0.5 + 0.5;
+
+    // Color shifting based on flow and time
+    float colorShift = sin(length(flow) * 3.14159 + uTime * uPulseSpeed) * 0.5 + 0.5;
+
+    // Mix colors based on quantum properties
+    vec3 quantumColor = mix(
+      mix(uColorA, uColorB, heightPulse),
+      uColorC,
+      colorShift
+    );
+
+    // Add shimmer effect
+    float shimmer = sin(posHash * 6.28318 + uTime * uPulseSpeed * 2.0) * 0.3 + 0.7;
+    shimmer *= (1.0 - abs(dot(norm, viewDir)) * 0.5);
+
+    // Combine with diffuse and fresnel
+    vec3 finalColor = quantumColor * diffuse * shimmer;
+    finalColor += uColorC * fresnel * (0.5 + 0.5 * sin(uTime * uPulseSpeed));
+
+    // Add flowing particle effect
+    float particleFlow = sin(length(flow) + uTime * uFlowSpeed);
+    finalColor += mix(uColorA, uColorC, particleFlow * 0.5) * fresnel * 0.5;
+
+    gl_FragColor = vec4(finalColor, uOpacity);
+  }
+`
+
 function TurbineMesh() {
   const groupRef = useRef<THREE.Group>(null)
   const shaftRef = useRef<THREE.Mesh>(null)
@@ -258,12 +397,13 @@ function TurbineMesh() {
     isTransitioning, transitionProgress, curveSmoothing,
     chordCurve, twistCurve, bladeSections,
     airfoilPreset, customNacaM, customNacaP, customNacaT,
-    neonConfig, bambooConfig,
+    neonConfig, bambooConfig, quantumConfig,
   } = useTurbineStore()
 
   const isNeonShader = materialPreset === 'neon-shader'
   const isBambooShader = materialPreset === 'bamboo-shader'
-  const basePreset = (isNeonShader || isBambooShader) ? 'teal-metal' : materialPreset
+  const isQuantumShader = materialPreset === 'quantum-shader'
+  const basePreset = (isNeonShader || isBambooShader || isQuantumShader) ? 'teal-metal' : materialPreset
   const matConfig = { ...MATERIAL_PRESETS[basePreset as MaterialPreset], ...(materialOverrides[materialPreset] ?? {}) }
 
   // Build geometry from blade curve — closed airfoil cross-section
@@ -409,6 +549,20 @@ function TurbineMesh() {
     uOpacity:      { value: DEFAULT_BAMBOO_CONFIG.opacity },
   }), [])
 
+  // Quantum shader material uniforms
+  const quantumUniforms = useMemo(() => ({
+    uTime:         { value: 0 },
+    uColorA:       { value: new THREE.Color(DEFAULT_QUANTUM_CONFIG.colorA) },
+    uColorB:       { value: new THREE.Color(DEFAULT_QUANTUM_CONFIG.colorB) },
+    uColorC:       { value: new THREE.Color(DEFAULT_QUANTUM_CONFIG.colorC) },
+    uFlowSpeed:    { value: DEFAULT_QUANTUM_CONFIG.flowSpeed },
+    uFlowIntensity:{ value: DEFAULT_QUANTUM_CONFIG.flowIntensity },
+    uPulseSpeed:   { value: DEFAULT_QUANTUM_CONFIG.pulseSpeed },
+    uNoiseScale:   { value: DEFAULT_QUANTUM_CONFIG.noiseScale },
+    uFlowType:     { value: DEFAULT_QUANTUM_CONFIG.flowType },
+    uOpacity:      { value: DEFAULT_QUANTUM_CONFIG.opacity },
+  }), [])
+
   // Materials
   const bladeMaterial = useMemo(() => {
     if (isNeonShader) {
@@ -427,6 +581,15 @@ function TurbineMesh() {
         fragmentShader: BAMBOO_FRAG,
         side: THREE.DoubleSide,
         transparent: false,
+      })
+    }
+    if (isQuantumShader) {
+      return new THREE.ShaderMaterial({
+        uniforms: quantumUniforms,
+        vertexShader: QUANTUM_VERT,
+        fragmentShader: QUANTUM_FRAG,
+        side: THREE.DoubleSide,
+        transparent: true,
       })
     }
     const transparent = matConfig.transparent || matConfig.opacity < 1
@@ -491,6 +654,22 @@ function TurbineMesh() {
       bambooUniforms.uPattern.value = bc.pattern
       bambooUniforms.uShininess.value = bc.shininess
       bambooUniforms.uOpacity.value = bc.opacity
+    }
+
+    // Update quantum shader uniforms live
+    if (isQuantumShader) {
+      shaderTimeRef.current += delta
+      const qc = useTurbineStore.getState().quantumConfig
+      quantumUniforms.uTime.value = shaderTimeRef.current
+      quantumUniforms.uColorA.value.set(qc.colorA)
+      quantumUniforms.uColorB.value.set(qc.colorB)
+      quantumUniforms.uColorC.value.set(qc.colorC)
+      quantumUniforms.uFlowSpeed.value = qc.flowSpeed
+      quantumUniforms.uFlowIntensity.value = qc.flowIntensity
+      quantumUniforms.uPulseSpeed.value = qc.pulseSpeed
+      quantumUniforms.uNoiseScale.value = qc.noiseScale
+      quantumUniforms.uFlowType.value = qc.flowType
+      quantumUniforms.uOpacity.value = qc.opacity
     }
 
     // Staggered reveal animation
@@ -725,17 +904,73 @@ function WindParticles() {
 }
 
 function GroundPlane() {
+  const { environmentConfig } = useTurbineStore()
+
+  // Simple procedural terrain shader for natural grass variation
+  const grassMaterial = useMemo(() => {
+    const baseColor = new THREE.Color(environmentConfig.groundColor)
+    const darkColor = baseColor.clone().multiplyScalar(0.6)
+    const rawLight = baseColor.clone().multiplyScalar(1.3)
+    const lightColor = new THREE.Color(
+      Math.min(1, rawLight.r),
+      Math.min(1, rawLight.g),
+      Math.min(1, rawLight.b)
+    )
+
+    return new THREE.ShaderMaterial({
+      uniforms: {
+        uDarkColor: { value: darkColor },
+        uLightColor: { value: lightColor },
+        uBrightColor: { value: baseColor },
+        uVariation: { value: environmentConfig.groundColorVariation },
+      },
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 uDarkColor;
+      uniform vec3 uLightColor;
+      uniform vec3 uBrightColor;
+      uniform float uVariation;
+      varying vec2 vUv;
+
+      // Simple noise function
+      float noise(vec2 p) {
+        vec2 i = floor(p * 8.0);
+        vec2 f = fract(p * 8.0);
+        f = f * f * (3.0 - 2.0 * f);
+        float n = mix(
+          mix(sin(i.x * 12.9898 + i.y * 78.233) * 43758.5453, sin((i.x+1.0) * 12.9898 + i.y * 78.233) * 43758.5453, f.x),
+          mix(sin(i.x * 12.9898 + (i.y+1.0) * 78.233) * 43758.5453, sin((i.x+1.0) * 12.9898 + (i.y+1.0) * 78.233) * 43758.5453, f.x),
+          f.y
+        );
+        return fract(n) * 0.5 + 0.5;
+      }
+
+      void main() {
+        float dist = length(vUv - 0.5);
+        float n = noise(vUv);
+        float pattern = sin(dist * 15.0) * 0.3 + n * uVariation;
+        vec3 baseColor = mix(uDarkColor, uLightColor, dist < 0.4 ? 1.0 - dist / 0.4 : 0.0);
+        baseColor = mix(baseColor, uBrightColor, dist > 0.4 && dist < 0.5 ? (0.5 - dist) * 10.0 : 0.0);
+        baseColor = mix(baseColor, mix(uDarkColor, uLightColor, 0.3), dist >= 0.5 ? 1.0 : 0.0);
+        gl_FragColor = vec4(baseColor * (0.85 + pattern * 0.15), 1.0);
+      }
+    `,
+      side: THREE.DoubleSide,
+    })
+  }, [environmentConfig.groundColor, environmentConfig.groundColorVariation])
+
   return (
     <>
-      {/* Wide flat grass terrain */}
+      {/* Wide flat grass terrain with subtle procedural variation */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
         <planeGeometry args={[60, 60]} />
-        <meshStandardMaterial color="#3a6b1e" roughness={0.92} metalness={0} />
-      </mesh>
-      {/* Inner lush ring closer to turbine */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
-        <circleGeometry args={[5, 64]} />
-        <meshStandardMaterial color="#4a8024" roughness={0.88} metalness={0} />
+        <primitive object={grassMaterial} />
       </mesh>
       {/* Concrete/dirt base pad under turbine */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
@@ -768,6 +1003,43 @@ function CanvasRefCapture({ onCanvas }: { onCanvas: (c: HTMLCanvasElement) => vo
   return null
 }
 
+// ── Dynamic Sky component with environment settings ──────────────────────────────
+function SkyComponent() {
+  const { environmentConfig } = useTurbineStore()
+  const { theme } = useThemeStore()
+  const isLight = theme === 'light'
+
+  const skySettings = SKY_PRESETS[environmentConfig.skyPreset]
+  const turbidity = skySettings.turbidity + environmentConfig.cloudIntensity * 3
+
+  return (
+    <>
+      <Sky
+        distance={450}
+        sunPosition={skySettings.sunPosition as [number, number, number]}
+        turbidity={turbidity}
+        rayleigh={skySettings.rayleigh}
+        mieCoefficient={0.004}
+        mieDirectionalG={0.85}
+        inclination={0.49}
+        azimuth={0.25}
+      />
+      {/* Atmospheric haze - adapt to sky preset */}
+      <fog
+        attach="fog"
+        args={[
+          environmentConfig.skyPreset === 'night' ? '#1a1a2e' :
+          environmentConfig.skyPreset === 'sunset' ? '#ff9977' :
+          environmentConfig.skyPreset === 'stormy' ? '#777788' :
+          isLight ? '#dbeafe' : '#c8dff0',
+          environmentConfig.skyPreset === 'night' ? 10 : 18,
+          environmentConfig.skyPreset === 'night' ? 40 : 80
+        ]}
+      />
+    </>
+  )
+}
+
 // ── Smart OrbitControls: pause auto-rotate while dragging ─────────────────────
 function SmartOrbitControls({ isTransitioning }: { isTransitioning: boolean }) {
   const [isDragging, setIsDragging] = useState(false)
@@ -781,7 +1053,7 @@ function SmartOrbitControls({ isTransitioning }: { isTransitioning: boolean }) {
       minDistance={1}
       maxDistance={6}
       target={target}
-      maxPolarAngle={Math.PI / 2 + 0.3}
+      maxPolarAngle={Math.PI / 2}
       autoRotate={!isDragging}
       autoRotateSpeed={0.5}
       enabled={!isTransitioning}
@@ -808,26 +1080,14 @@ export default function TurbineViewer() {
   }), [isLight])
 
   return (
-    <div className="w-full h-full">
+    <div className="w-full h-full relative">
       <Canvas
-        camera={{ position: [1.8, 1.6, 1.8], fov: 45, near: 0.1, far: 200 }}
+        camera={{ position: [1.8, 1.6, 1.8], fov: 45, near: 0.01, far: 500 }}
         gl={glConfig}
         shadows="soft"
       >
         {/* Sky dome — Preetham atmospheric model */}
-        <Sky
-          distance={450}
-          sunPosition={[100, 30, 50]}
-          turbidity={isLight ? 4 : 6}
-          rayleigh={isLight ? 0.5 : 0.8}
-          mieCoefficient={0.004}
-          mieDirectionalG={0.85}
-          inclination={0.49}
-          azimuth={0.25}
-        />
-
-        {/* Atmospheric haze toward horizon */}
-        <fog attach="fog" args={[isLight ? '#dbeafe' : '#c8dff0', isLight ? 22 : 18, 80]} />
+        <SkyComponent />
 
         <SceneCapture />
         <CanvasRefCapture onCanvas={handleCanvas} />
@@ -856,7 +1116,7 @@ export default function TurbineViewer() {
 
         <BloomTransitionOverlay />
 
-        <Float speed={0.5} rotationIntensity={0} floatIntensity={0.3}>
+        <Float speed={0.5} rotationIntensity={0} floatIntensity={0}>
           <TurbineMesh />
         </Float>
         <WindParticles />
@@ -865,6 +1125,11 @@ export default function TurbineViewer() {
 
         <SmartOrbitControls isTransitioning={isTransitioning} />
       </Canvas>
+
+      {/* Scene controls icon — top-left overlay */}
+      <SceneControls />
+      {/* Physics dashboard icon — top-right overlay */}
+      <PhysicsDashboardCompact />
     </div>
   )
 }

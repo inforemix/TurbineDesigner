@@ -8,13 +8,11 @@ import SideViewCanvas from './components/canvas/SideViewCanvas'
 import TurbineViewer from './components/viewer/TurbineViewer'
 import ParameterPanel from './components/ui/ParameterPanel'
 import PresetBrowser from './components/ui/PresetBrowser'
-import PhysicsDashboard from './components/ui/PhysicsDashboard'
 import BladeSectionStacker from './components/ui/BladeSectionStacker'
 import PuzzleHUD from './components/puzzle/PuzzleHUD'
 import ChallengeList from './components/puzzle/ChallengeList'
 import Celebration from './components/puzzle/Celebration'
 import BladeSectionEditor from './components/editor/BladeSectionEditor'
-import SectionPreview from './components/editor/SectionPreview'
 import CentralController from './components/ui/CentralController'
 import AirfoilSelector from './components/ui/AirfoilSelector'
 import { TooltipProvider } from './components/ui/tooltip'
@@ -106,14 +104,11 @@ export default function App() {
           {/* Main Canvas Area */}
           <div className="flex-1 flex flex-col overflow-hidden p-2 sm:p-3 md:p-3 lg:p-4 gap-2 sm:gap-3 min-w-0">
             {mode === 'draw' ? (
-              <div className="flex-1 flex flex-col gap-2 sm:gap-3 min-h-0">
-                <div className="flex-1 relative rounded-lg border border-border overflow-hidden bg-background min-h-0">
-                  <KaleidoscopeCanvas />
-                  <PuzzleHUD />
-                  <CentralController />
-                  <CanvasHint text="Click to add · Drag to reshape · Ctrl+Z undo" />
-                </div>
-                <SectionPanel />
+              <div className="flex-1 relative rounded-lg border border-border overflow-hidden bg-background min-h-0">
+                <KaleidoscopeCanvas />
+                <PuzzleHUD />
+                <CentralController />
+                <CanvasHint text="Click to add · Drag to reshape · Ctrl+Z undo" />
               </div>
             ) : mode === 'side' ? (
               <div className="flex-1 rounded-lg border border-border overflow-hidden bg-background min-h-0">
@@ -158,11 +153,6 @@ export default function App() {
                         <BladeSectionEditor />
                       </div>
                     )}
-                    {mode === 'view' && (
-                      <div className="border-t border-border pt-5 xl:pt-6">
-                        <PhysicsDashboard />
-                      </div>
-                    )}
                   </div>
                 </ScrollArea>
               </div>
@@ -201,30 +191,6 @@ function CanvasHint({ text }: { text: string }) {
       <div className="bg-card/90 backdrop-blur-md rounded-full px-3 sm:px-4 py-1.5 sm:py-2 border border-border text-[9px] sm:text-[10px] text-muted-foreground shadow-lg whitespace-nowrap">
         {text}
       </div>
-    </div>
-  )
-}
-
-function SectionPanel() {
-  const [expanded, setExpanded] = useState(false)
-
-  return (
-    <div
-      className="shrink-0 rounded-lg border border-border bg-card overflow-hidden transition-all duration-300"
-      style={{ height: expanded ? 220 : 44 }}
-    >
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full h-11 flex items-center justify-between px-4 text-xs uppercase tracking-widest text-muted-foreground hover:text-primary hover:bg-primary/5 font-semibold transition-colors"
-      >
-        <span>2.5D Section</span>
-        <span>{expanded ? '▼' : '▲'}</span>
-      </button>
-      {expanded && (
-        <div className="h-[176px] border-t border-border p-3">
-          <SectionPreview />
-        </div>
-      )}
     </div>
   )
 }

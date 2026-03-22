@@ -82,63 +82,74 @@ export function solveDMST(input: DMSTInput): DMSTOutput {
     divisions = 36,
   } = input
 
+  // Guard against invalid inputs
+  if (V <= 0 || R <= 0 || H <= 0 || c <= 0) {
+    return {
+      cp: 0, cq: 0, power: 0, torque: 0, omega: 0,
+      cn_array: [], ct_array: [], a_up: [], a_dn: [],
+    }
+  }
+
   const omega = (lambda * V) / R
   const sigma = (N * c) / (2 * R) // rotor solidity
   const A = 2 * R * H // reference swept area
 
   const cn_array: number[] = new Array(divisions).fill(0)
   const ct_array: number[] = new Array(divisions).fill(0)
-  const a_up: number[] = new Array(divisions).fill(0)
-  const a_dn: number[] = new Array(divisions).fill(0)
+  const a_up: number[] = new Array(divisions).fill(0.2)
+  const a_dn: number[] = new Array(divisions).fill(0.2)
 
   let Cq_total = 0
 
   for (let i = 0; i < divisions; i++) {
     const theta = (i / divisions) * Math.PI * 2
-
-    // ── Upstream half (0 < θ < π) ───────────────────────────────────────────
     const isUpstream = Math.cos(theta) >= 0
     const semiPlane = isUpstream ? 1 : -1
 
-    // Initial guess for induction factor a
-    let a = 0.25
-    let Ve: number // equatorial velocity
+    let a = 0.2
+    let Ve = V * 0.8
+    let ct = 0
     let alpha_deg = 0
 
-    // Iterate induction factor (converges in ~5–10 steps)
+    // Iterate induction factor
     for (let iter = 0; iter < 20; iter++) {
       if (isUpstream) {
         Ve = V * (1 - a)
       } else {
-        Ve = V * (1 - 2 * a_up[i]) * (1 - a) // use upstream a for downstream calc
+        const a_upstream = a_up[i] ?? 0.2
+        Ve = V * (1 - 2 * a_upstream) * (1 - a)
+        Ve = Math.max(0.001, Ve) // Prevent division by zero
       }
 
       const Vrel_x = Ve * Math.cos(theta) - omega * R * Math.sin(theta) * semiPlane
       const Vrel_y = Ve * Math.sin(theta) + omega * R * Math.cos(theta) * semiPlane
       const Vrel = Math.sqrt(Vrel_x ** 2 + Vrel_y ** 2)
 
-      // Local angle of attack
+      if (Vrel < 0.001) break // No relative velocity
+
       const phi = Math.atan2(Vrel_y, Vrel_x) * (180 / Math.PI)
       const alpha = phi - pitch
 
       const Cl = cl(alpha)
       const Cd = cd(alpha)
 
-      // Normal & tangential force coefficients (per unit span)
       const cn = Cl * Math.cos(phi * Math.PI / 180) + Cd * Math.sin(phi * Math.PI / 180)
-      const ct = Cl * Math.sin(phi * Math.PI / 180) - Cd * Math.cos(phi * Math.PI / 180)
+      ct = Cl * Math.sin(phi * Math.PI / 180) - Cd * Math.cos(phi * Math.PI / 180)
 
-      // Thrust coefficient for this streamtube element
       const dCt = (sigma / (4 * Math.PI)) * (Vrel / Ve) ** 2 * cn * Math.abs(Math.sin(theta))
 
-      // Updated induction factor (Glauert correction for high induction)
       let a_new: number
       if (dCt <= 0.96) {
         a_new = dCt / (1 + dCt)
       } else {
-        // Glauert empirical correction
-        a_new = (18 * dCt - 20 - 3 * Math.sqrt(dCt * (50 - 36 * dCt) + 12 * (3 * dCt - 4))) / (36 * dCt - 50)
-        a_new = Math.max(0, Math.min(0.95, a_new))
+        // Glauert correction with safe sqrt
+        const sqrtArg = dCt * (50 - 36 * dCt) + 12 * (3 * dCt - 4)
+        if (sqrtArg < 0) {
+          a_new = Math.max(0, Math.min(0.95, dCt * 0.5))
+        } else {
+          a_new = (18 * dCt - 20 - 3 * Math.sqrt(sqrtArg)) / (36 * dCt - 50)
+          a_new = Math.max(0, Math.min(0.95, a_new))
+        }
       }
 
       if (Math.abs(a_new - a) < 1e-5) {
@@ -158,28 +169,28 @@ export function solveDMST(input: DMSTInput): DMSTOutput {
       a_dn[i] = a
     }
 
-    // Contribution to torque coefficient
-    const Vrel_x = Ve! * Math.cos(theta) - omega * R * Math.sin(theta) * semiPlane
-    const Vrel_y = Ve! * Math.sin(theta) + omega * R * Math.cos(theta) * semiPlane
+    // Safe torque calculation
+    const Vrel_x = Ve * Math.cos(theta) - omega * R * Math.sin(theta) * semiPlane
+    const Vrel_y = Ve * Math.sin(theta) + omega * R * Math.cos(theta) * semiPlane
     const Vrel = Math.sqrt(Vrel_x ** 2 + Vrel_y ** 2)
 
-    // alpha_deg used during iteration; suppress unused warning
-    void alpha_deg
-    Cq_total += (sigma / (4 * Math.PI)) * (Vrel / V) ** 2 * ct_array[i] / divisions
+    if (Vrel > 0.001 && V > 0) {
+      Cq_total += (sigma / (4 * Math.PI)) * (Vrel / V) ** 2 * ct / divisions
+    }
   }
 
-  const Cp = lambda * Cq_total * 2
-  const Cq = Cq_total * 2
+  const Cp = Math.max(0, lambda * Cq_total * 2)
+  const Cq = Math.max(0, Cq_total * 2)
 
   const power = 0.5 * 1.225 * A * V ** 3 * Cp
   const torque = power / Math.max(omega, 0.001)
 
   return {
-    cp: Math.max(0, Cp),
-    cq: Math.max(0, Cq),
-    power: Math.max(0, power),
-    torque: Math.max(0, torque),
-    omega,
+    cp: isFinite(Cp) ? Cp : 0,
+    cq: isFinite(Cq) ? Cq : 0,
+    power: isFinite(power) ? Math.max(0, power) : 0,
+    torque: isFinite(torque) ? Math.max(0, torque) : 0,
+    omega: isFinite(omega) ? omega : 0,
     cn_array,
     ct_array,
     a_up,
