@@ -725,17 +725,58 @@ function WindParticles() {
 }
 
 function GroundPlane() {
+  // Simple procedural terrain shader for natural grass variation
+  const grassMaterial = useMemo(() => new THREE.ShaderMaterial({
+    uniforms: {
+      uDarkColor: { value: new THREE.Color('#2d5517') },
+      uLightColor: { value: new THREE.Color('#4a8024') },
+      uBrightColor: { value: new THREE.Color('#5a9a34') },
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 uDarkColor;
+      uniform vec3 uLightColor;
+      uniform vec3 uBrightColor;
+      varying vec2 vUv;
+
+      // Simple noise function
+      float noise(vec2 p) {
+        vec2 i = floor(p * 8.0);
+        vec2 f = fract(p * 8.0);
+        f = f * f * (3.0 - 2.0 * f);
+        float n = mix(
+          mix(sin(i.x * 12.9898 + i.y * 78.233) * 43758.5453, sin((i.x+1.0) * 12.9898 + i.y * 78.233) * 43758.5453, f.x),
+          mix(sin(i.x * 12.9898 + (i.y+1.0) * 78.233) * 43758.5453, sin((i.x+1.0) * 12.9898 + (i.y+1.0) * 78.233) * 43758.5453, f.x),
+          f.y
+        );
+        return fract(n) * 0.5 + 0.5;
+      }
+
+      void main() {
+        float dist = length(vUv - 0.5);
+        float n = noise(vUv);
+        float pattern = sin(dist * 15.0) * 0.3 + n * 0.2;
+        vec3 baseColor = mix(uDarkColor, uLightColor, dist < 0.4 ? 1.0 - dist / 0.4 : 0.0);
+        baseColor = mix(baseColor, uBrightColor, dist > 0.4 && dist < 0.5 ? (0.5 - dist) * 10.0 : 0.0);
+        baseColor = mix(baseColor, mix(uDarkColor, uLightColor, 0.3), dist >= 0.5 ? 1.0 : 0.0);
+        gl_FragColor = vec4(baseColor * (0.85 + pattern * 0.15), 1.0);
+      }
+    `,
+    side: THREE.DoubleSide,
+  }), [])
+
   return (
     <>
-      {/* Wide flat grass terrain */}
+      {/* Wide flat grass terrain with subtle procedural variation */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
         <planeGeometry args={[60, 60]} />
-        <meshStandardMaterial color="#3a6b1e" roughness={0.92} metalness={0} />
-      </mesh>
-      {/* Inner lush ring closer to turbine */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
-        <circleGeometry args={[5, 64]} />
-        <meshStandardMaterial color="#4a8024" roughness={0.88} metalness={0} />
+        <primitive object={grassMaterial} />
       </mesh>
       {/* Concrete/dirt base pad under turbine */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
@@ -856,7 +897,7 @@ export default function TurbineViewer() {
 
         <BloomTransitionOverlay />
 
-        <Float speed={0.5} rotationIntensity={0} floatIntensity={0.3}>
+        <Float speed={0.5} rotationIntensity={0} floatIntensity={0}>
           <TurbineMesh />
         </Float>
         <WindParticles />
