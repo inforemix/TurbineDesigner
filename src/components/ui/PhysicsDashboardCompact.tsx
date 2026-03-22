@@ -3,7 +3,7 @@ import { useTurbineStore } from '../../stores/turbineStore'
 import { solveDMST } from '../../physics/dmst'
 
 export default function PhysicsDashboardCompact() {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
   const { windSpeed, bladeCount, height, thickness, bloomTier } = useTurbineStore()
 
   const radius = 0.5
@@ -53,7 +53,7 @@ export default function PhysicsDashboardCompact() {
             : 'bg-card/80 border-border/60 text-muted-foreground hover:bg-card hover:text-foreground hover:border-border'
         }`}
       >
-        ⚙️
+        📊
       </button>
 
       {/* Dropdown panel */}

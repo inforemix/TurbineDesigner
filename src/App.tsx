@@ -8,7 +8,6 @@ import SideViewCanvas from './components/canvas/SideViewCanvas'
 import TurbineViewer from './components/viewer/TurbineViewer'
 import ParameterPanel from './components/ui/ParameterPanel'
 import PresetBrowser from './components/ui/PresetBrowser'
-import PhysicsDashboard from './components/ui/PhysicsDashboard'
 import BladeSectionStacker from './components/ui/BladeSectionStacker'
 import PuzzleHUD from './components/puzzle/PuzzleHUD'
 import ChallengeList from './components/puzzle/ChallengeList'
@@ -152,11 +151,6 @@ export default function App() {
                     {mode === 'draw' && (
                       <div className="border-t border-border pt-5 xl:pt-6">
                         <BladeSectionEditor />
-                      </div>
-                    )}
-                    {mode === 'view' && (
-                      <div className="border-t border-border pt-5 xl:pt-6">
-                        <PhysicsDashboard />
                       </div>
                     )}
                   </div>
