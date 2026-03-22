@@ -7,7 +7,6 @@ import { useThemeStore } from '../../stores/themeStore'
 import { catmullRomSplineWithHandles } from '../../utils/spline'
 import { resolveProfileData, halfThickNorm } from '../../utils/airfoil'
 import SceneControls from './SceneControls'
-import { Label } from '../ui/label'
 
 function easeOutCubic(t: number) { return 1 - Math.pow(1 - t, 3) }
 function easeOutBack(t: number) { const c1 = 1.70158; const c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2) }
@@ -910,7 +909,12 @@ function GroundPlane() {
   const grassMaterial = useMemo(() => {
     const baseColor = new THREE.Color(environmentConfig.groundColor)
     const darkColor = baseColor.clone().multiplyScalar(0.6)
-    const lightColor = baseColor.clone().multiplyScalar(1.3).clamp(new THREE.Color(0, 0, 0), new THREE.Color(1, 1, 1))
+    const rawLight = baseColor.clone().multiplyScalar(1.3)
+    const lightColor = new THREE.Color(
+      Math.min(1, rawLight.r),
+      Math.min(1, rawLight.g),
+      Math.min(1, rawLight.b)
+    )
 
     return new THREE.ShaderMaterial({
       uniforms: {
@@ -1075,7 +1079,7 @@ export default function TurbineViewer() {
   }), [isLight])
 
   return (
-    <div className="w-full h-full">
+    <div className="w-full h-full relative">
       <Canvas
         camera={{ position: [1.8, 1.6, 1.8], fov: 45, near: 0.01, far: 500 }}
         gl={glConfig}
@@ -1121,13 +1125,8 @@ export default function TurbineViewer() {
         <SmartOrbitControls isTransitioning={isTransitioning} />
       </Canvas>
 
-      {/* Scene Controls Overlay */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
-        <div className="bg-card/95 backdrop-blur-md rounded-xl border border-border p-4 w-72 shadow-xl pointer-events-auto">
-          <Label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block mb-3">Scene Settings</Label>
-          <SceneControls />
-        </div>
-      </div>
+      {/* Scene controls icon — top-left overlay */}
+      <SceneControls />
     </div>
   )
 }
