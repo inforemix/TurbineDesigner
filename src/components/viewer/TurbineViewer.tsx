@@ -397,7 +397,6 @@ function TurbineMesh() {
     isTransitioning, transitionProgress, curveSmoothing,
     chordCurve, twistCurve, bladeSections,
     airfoilPreset, customNacaM, customNacaP, customNacaT,
-    neonConfig, bambooConfig, quantumConfig,
   } = useTurbineStore()
 
   const isNeonShader = materialPreset === 'neon-shader'

@@ -488,7 +488,6 @@ export default function KaleidoscopeCanvas() {
     setBladePoints,
     updateBladePoint,
     deleteBladePoint,
-    bladeHandles,
     updateBladeHandle,
     resetBladeHandle,
     resetAllHandles,

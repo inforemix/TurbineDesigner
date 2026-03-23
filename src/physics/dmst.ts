@@ -109,7 +109,6 @@ export function solveDMST(input: DMSTInput): DMSTOutput {
     let a = 0.2
     let Ve = V * 0.8
     let ct = 0
-    let alpha_deg = 0
 
     // Iterate induction factor
     for (let iter = 0; iter < 20; iter++) {
@@ -154,13 +153,11 @@ export function solveDMST(input: DMSTInput): DMSTOutput {
 
       if (Math.abs(a_new - a) < 1e-5) {
         a = a_new
-        alpha_deg = alpha
         cn_array[i] = cn
         ct_array[i] = ct
         break
       }
       a = a_new
-      alpha_deg = alpha
     }
 
     if (isUpstream) {
