@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useTurbineStore, type SkyPreset, type GroundTexture, SKY_PRESETS, GROUND_COLORS } from '../../stores/turbineStore'
+import { useTurbineStore, type SkyPreset, type GroundTexture, GROUND_COLORS } from '../../stores/turbineStore'
 import { Slider } from '../ui/slider'
 
 const SKY_ICONS: Record<SkyPreset, string> = {

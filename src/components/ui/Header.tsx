@@ -1,22 +1,16 @@
 import { useState } from 'react'
 import { useTurbineStore } from '../../stores/turbineStore'
-import { usePuzzleStore } from '../../stores/puzzleStore'
 import { useThemeStore } from '../../stores/themeStore'
-import { CHALLENGES } from '../../data/challenges'
 import { Badge } from './badge'
 import { Button } from './button'
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip'
-import { Sun, Moon, Zap } from 'lucide-react'
+import { Sun, Moon } from 'lucide-react'
 import SavePanel from './SavePanel'
 
 export default function Header() {
   const { mode, setMode, bloomTier, savedDesigns } = useTurbineStore()
   const [showSave, setShowSave] = useState(false)
-  const { activeChallengeId, showChallengeList, setShowChallengeList, completedChallenges } = usePuzzleStore()
   const { theme, toggleTheme } = useThemeStore()
-
-  const activeChallenge = CHALLENGES.find(c => c.id === activeChallengeId)
-  const totalCompleted = Object.keys(completedChallenges).length
 
   const tierGlow: Record<string, string> = {
     dormant: '',
@@ -38,13 +32,13 @@ export default function Header() {
           </svg>
         </div>
         <span className="text-base font-bold tracking-tight text-foreground hidden sm:block">
-          Turbine<span className="text-teal">Bloom</span>
+          Turbine<span className="text-teal">Designer</span>
         </span>
         <Badge
           variant="outline"
           className="text-xs px-2 h-6 border-teal/30 text-teal bg-teal/10 font-semibold hidden sm:flex"
         >
-          v0.3
+          v1.0
         </Badge>
       </div>
 
@@ -106,38 +100,6 @@ export default function Header() {
 
         {/* Save dropdown panel */}
         {showSave && <SavePanel onClose={() => setShowSave(false)} />}
-
-        {/* Active challenge badge */}
-        {activeChallenge && (
-          <Badge
-            variant="outline"
-            className="hidden sm:flex gap-1.5 text-xs text-teal border-teal/30 bg-teal/10 px-2.5 h-6 font-semibold"
-          >
-            <span>{activeChallenge.icon}</span>
-            <span className="max-w-[100px] truncate">{activeChallenge.title}</span>
-          </Badge>
-        )}
-
-        {/* Challenges button */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowChallengeList(!showChallengeList)}
-              className="h-10 px-3 text-sm border-border bg-background text-muted-foreground hover:text-teal hover:border-teal/40 font-semibold"
-            >
-              <Zap size={20} />
-              <span className="hidden sm:inline ml-1.5">Challenges</span>
-              {totalCompleted > 0 && (
-                <Badge className="ml-1.5 text-xs h-5 px-1.5 bg-teal/20 text-teal border-teal/30 font-bold">
-                  {totalCompleted}
-                </Badge>
-              )}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Wind challenges</TooltipContent>
-        </Tooltip>
 
         {/* Theme toggle */}
         <Tooltip>

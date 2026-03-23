@@ -397,7 +397,6 @@ function TurbineMesh() {
     isTransitioning, transitionProgress, curveSmoothing,
     chordCurve, twistCurve, bladeSections,
     airfoilPreset, customNacaM, customNacaP, customNacaT,
-    neonConfig, bambooConfig, quantumConfig,
   } = useTurbineStore()
 
   const isNeonShader = materialPreset === 'neon-shader'
@@ -737,48 +736,67 @@ function TurbineMesh() {
   if (!meshData) return null
 
   return (
-    <group ref={groupRef}>
-      {/* Central shaft */}
-      <mesh ref={shaftRef} position={[0, height * 0.65, 0]} material={strutMaterial}>
-        <cylinderGeometry args={[0.04, 0.04, height * 1.3, 16]} />
+    <>
+      <group ref={groupRef}>
+        {/* Central shaft */}
+        <mesh ref={shaftRef} position={[0, height * 0.65, 0]} material={strutMaterial}>
+          <cylinderGeometry args={[0.04, 0.04, height * 1.3, 16]} />
+        </mesh>
+
+        {/* Blades with wireframe overlay */}
+        {meshData.map((geo, i) => (
+          <group key={i}>
+            <mesh
+              ref={el => { bladeRefs.current[i] = el }}
+              geometry={geo}
+              material={bladeMaterial}
+            />
+            {!isNeonShader && !isBambooShader && <mesh geometry={geo} material={wireframeMaterial} />}
+          </group>
+        ))}
+
+        {/* Top strut ring + radial struts (rotating with blades) */}
+        <group ref={strutGroupRef}>
+          <mesh position={[0, height * 1.05, 0]} rotation={[Math.PI / 2, 0, 0]} material={strutMaterial}>
+            <torusGeometry args={[0.18, 0.012, 8, 32]} />
+          </mesh>
+
+          {Array.from({ length: bladeCount }).map((_, b) => {
+            const angle = (b / bladeCount) * Math.PI * 2
+            return [height * 1.05].map((yPos, si) => (
+              <mesh
+                key={`strut-${b}-${si}`}
+                position={[Math.cos(angle) * 0.22, yPos, Math.sin(angle) * 0.22]}
+                rotation={[0, -angle + Math.PI / 2, Math.PI / 2]}
+                material={strutMaterial}
+              >
+                <cylinderGeometry args={[0.008, 0.008, 0.4, 6]} />
+              </mesh>
+            ))
+          })}
+        </group>
+      </group>
+
+      {/* Bottom base disk - static, no rotation */}
+      <mesh position={[0, height * 0.25, 0]} rotation={[Math.PI / 2, 0, 0]} material={strutMaterial}>
+        <torusGeometry args={[0.18, 0.012, 8, 32]} />
       </mesh>
 
-      {/* Blades with wireframe overlay */}
-      {meshData.map((geo, i) => (
-        <group key={i}>
+      {/* Bottom radial struts - static, no rotation */}
+      {Array.from({ length: bladeCount }).map((_, b) => {
+        const angle = (b / bladeCount) * Math.PI * 2
+        return (
           <mesh
-            ref={el => { bladeRefs.current[i] = el }}
-            geometry={geo}
-            material={bladeMaterial}
-          />
-          {!isNeonShader && !isBambooShader && <mesh geometry={geo} material={wireframeMaterial} />}
-        </group>
-      ))}
-
-      {/* Top & bottom strut rings + radial struts */}
-      <group ref={strutGroupRef}>
-        <mesh position={[0, height * 1.05, 0]} rotation={[Math.PI / 2, 0, 0]} material={strutMaterial}>
-          <torusGeometry args={[0.18, 0.012, 8, 32]} />
-        </mesh>
-        <mesh position={[0, height * 0.25, 0]} rotation={[Math.PI / 2, 0, 0]} material={strutMaterial}>
-          <torusGeometry args={[0.18, 0.012, 8, 32]} />
-        </mesh>
-
-        {Array.from({ length: bladeCount }).map((_, b) => {
-          const angle = (b / bladeCount) * Math.PI * 2
-          return [height * 0.25, height * 1.05].map((yPos, si) => (
-            <mesh
-              key={`strut-${b}-${si}`}
-              position={[Math.cos(angle) * 0.22, yPos, Math.sin(angle) * 0.22]}
-              rotation={[0, -angle + Math.PI / 2, Math.PI / 2]}
-              material={strutMaterial}
-            >
-              <cylinderGeometry args={[0.008, 0.008, 0.4, 6]} />
-            </mesh>
-          ))
-        })}
-      </group>
-    </group>
+            key={`bottom-strut-${b}`}
+            position={[Math.cos(angle) * 0.22, height * 0.25, Math.sin(angle) * 0.22]}
+            rotation={[0, -angle + Math.PI / 2, Math.PI / 2]}
+            material={strutMaterial}
+          >
+            <cylinderGeometry args={[0.008, 0.008, 0.4, 6]} />
+          </mesh>
+        )
+      })}
+    </>
   )
 }
 

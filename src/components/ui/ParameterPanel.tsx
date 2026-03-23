@@ -62,8 +62,6 @@ const SYMMETRY_OPTIONS: { value: SymmetryMode; label: string; desc: string }[] =
   { value: 'freeform',  label: 'Free', desc: 'Freeform' },
 ]
 
-const MATERIAL_KEYS = Object.keys(MATERIAL_PRESETS) as MaterialPreset[]
-
 // ── Export helpers ────────────────────────────────────────────────────────────
 async function handleExportGLB() {
   const { generateTurbineMesh, exportToGLB } = await import('../../utils/meshGenerator')
@@ -470,9 +468,6 @@ export default function ParameterPanel() {
                   <ParamSlider label="Metalness"  value={eff.metalness}  min={0} max={1}   step={0.01} onChange={v => set({ metalness: v })} />
                   <ParamSlider label="Roughness"  value={eff.roughness}  min={0} max={1}   step={0.01} onChange={v => set({ roughness: v })} />
                   <ParamSlider label="Opacity"    value={eff.opacity}    min={0.05} max={1} step={0.01} onChange={v => set({ opacity: v, transparent: v < 1 })} />
-                  {(eff.clearcoat ?? 0) >= 0 && materialPreset === 'carbon-fiber' && (
-                    <ParamSlider label="Clearcoat" value={eff.clearcoat ?? 0} min={0} max={1} step={0.01} onChange={v => set({ clearcoat: v })} />
-                  )}
                   {eff.emissiveIntensity > 0 && (
                     <ParamSlider label="Emit Intensity" value={eff.emissiveIntensity} min={0} max={1} step={0.01} onChange={v => set({ emissiveIntensity: v })} />
                   )}

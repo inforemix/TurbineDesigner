@@ -100,17 +100,23 @@ function MiniTurbineMesh() {
   const { geos, turbineHeight } = meshData
 
   return (
-    <group>
-      <mesh position={[0, turbineHeight * 0.65, 0]} material={strutMat}>
-        <cylinderGeometry args={[0.04, 0.04, turbineHeight * 1.3, 8]} />
-      </mesh>
-      {geos.map((geo, i) => (
-        <mesh key={i} geometry={geo} material={bladeMat} />
-      ))}
-      <mesh position={[0, turbineHeight * 1.05, 0]} rotation={[Math.PI / 2, 0, 0]} material={strutMat}>
+    <>
+      <group>
+        <mesh position={[0, turbineHeight * 0.65, 0]} material={strutMat}>
+          <cylinderGeometry args={[0.04, 0.04, turbineHeight * 1.3, 8]} />
+        </mesh>
+        {geos.map((geo, i) => (
+          <mesh key={i} geometry={geo} material={bladeMat} />
+        ))}
+        <mesh position={[0, turbineHeight * 1.05, 0]} rotation={[Math.PI / 2, 0, 0]} material={strutMat}>
+          <torusGeometry args={[0.18, 0.012, 6, 20]} />
+        </mesh>
+      </group>
+      {/* Bottom base disk - static, no spinning */}
+      <mesh position={[0, turbineHeight * 0.25, 0]} rotation={[Math.PI / 2, 0, 0]} material={strutMat}>
         <torusGeometry args={[0.18, 0.012, 6, 20]} />
       </mesh>
-    </group>
+    </>
   )
 }
 
