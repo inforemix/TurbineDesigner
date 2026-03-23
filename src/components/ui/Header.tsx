@@ -38,13 +38,13 @@ export default function Header() {
           </svg>
         </div>
         <span className="text-base font-bold tracking-tight text-foreground hidden sm:block">
-          Turbine<span className="text-teal">Bloom</span>
+          Turbine<span className="text-teal">Designer</span>
         </span>
         <Badge
           variant="outline"
           className="text-xs px-2 h-6 border-teal/30 text-teal bg-teal/10 font-semibold hidden sm:flex"
         >
-          v0.3
+          v1.0
         </Badge>
       </div>
 
